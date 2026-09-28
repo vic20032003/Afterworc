@@ -20,7 +20,7 @@ On first start outside production it creates:
 | Staff console (`/admin`) | `admin@afterworc.local` | `afterworc-admin` |
 | Demo (both modes, full data) | `demo@afterworc.com` | `afterworc-demo` |
 
-Without `SMTP_URL`, e-mails (verification links, reset links, codes) are printed in the server log and listed in **Staff console › E-mails**. In development the sign-up, reset and assessment forms also show the link or code on screen.
+Without `SMTP_URL`, e-mails (verification links, reset links, codes) are printed in the server log and listed in **Staff console › E-mails**. When the site runs on localhost, the sign-up, reset and assessment forms also show the link or code on screen (never on a public address).
 
 ## What works
 
@@ -51,11 +51,13 @@ Without `SMTP_URL`, e-mails (verification links, reset links, codes) are printed
 - Money: confirm SEPA top-ups, mark payouts as paid; see booked calls and interviews.
 - E-mails: everything the platform sent.
 
-## Test mode for money and the card
+## Money: what is live and what is test mode
 
-Payments and the Mastercard need licensed partners (a payment provider and a card issuer) that are not connected yet. Until then, balances, top-ups, payouts and cards run on an internal test ledger: every amount is tracked consistently (available, held, released, invoices), but no real money moves. The account shows a "Test mode" note on Money and Card pages. The card numbers are Mastercard test-range numbers.
+**Top-ups can be real.** Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and add the webhook `https://<your-domain>/api/stripe/webhook` in the Stripe dashboard (events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`). Card, bank-link and wallet top-ups then open Stripe Checkout. A balance is credited only from the signed webhook, once per payment, and only when the paid amount matches. SEPA top-ups are confirmed by staff in the console when the transfer arrives.
 
-To go live, replace the `topup`, `withdraw` and `card_*` actions in `server/routes/account.js` with calls to your providers (for example Stripe or Montonio for top-ups and payouts, and your issuer's API for cards) and credit balances from their webhooks.
+**Payouts** are requested in the account (2FA and an IBAN required) and listed under Staff console › Money. Staff send the bank transfer and mark it paid.
+
+**Still test mode:** without Stripe keys, top-ups are credited instantly on a test ledger, and the account shows a "Test mode" note. The **AfterWorc Mastercard** always runs in test mode until an issuing partner is connected: card numbers are Mastercard test-range numbers and no card payments happen. To go live with cards, replace the `card_*` actions in `server/routes/account.js` with your issuer's API.
 
 ## Configuration
 
@@ -70,6 +72,7 @@ Copy `.env.example` to `.env` (loaded automatically by `npm start`) or set the v
 | `DATA_DIR` | SQLite database and uploads. Use a persistent volume. |
 | `TRUST_PROXY` | `1` behind a reverse proxy. |
 | `WORKER_FEE_PCT` | Specialist fee at release, in percent. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Real card and wallet top-ups (see above). |
 
 ## Deploy
 
@@ -85,7 +88,7 @@ Put it behind HTTPS and back up the `/data` volume (it holds `afterworc.db` and 
 ## Tests
 
 ```bash
-npm test               # API: sign-up → brief → shortlist → deal → funding → delivery → payout, 2FA, reset, deletion, security checks
+npm test               # API (incl. Stripe webhook with a mocked Stripe): sign-up → brief → shortlist → deal → funding → delivery → payout, 2FA, reset, deletion, security checks
 npm run test:browser   # Clicks through the real UI in Chromium (needs playwright-core's Chromium or CHROMIUM_PATH)
 ```
 
@@ -110,5 +113,5 @@ test/             API tests and the browser end-to-end run
 ## Before launch
 
 - Have the Terms, Privacy Policy and Cookie Notice reviewed by counsel (`public/assets/legal.js`).
-- Connect the payment and card partners (see Test mode above).
+- Add your Stripe keys for real top-ups, and connect a card issuer (see Money above).
 - Set `SMTP_URL` so verification and reset e-mails are delivered.

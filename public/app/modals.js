@@ -22,7 +22,7 @@ function modalHtml(){
     <label class="field" style="margin-top:14px"><span>Pay with</span></label><div class="opts">${meth.map(([k,t,x])=>`<button class="opt ${m.m===k?'on':''}" data-act="topm" data-arg="${k}"><b style="font-size:14px;margin:0">${t}</b><span>${x}</span></button>`).join('')}</div>
     ${m.m==='sepa'?`<div class="card pad-s" style="margin-top:12px"><div class="kv"><span>Recipient</span><span>AfterWorc OÜ</span><span>IBAN</span><span class="mono" style="text-transform:none">Shown when payments go live</span><span>Reference</span><span class="mono" style="text-transform:none">AW-${d.me.id}-${S.mode.toUpperCase()}</span></div></div>`:''}
     <p class="muted tiny" style="margin-top:12px">${hire?'Top-ups fund milestones and the company card. Held deal money is separate.':'Handy for card spending, or to cover a refund to a client. Withdraw what you don\'t use any time.'}</p>`,
-    cancel+`<button class="btn g" data-act="dotopup" ${busy}>${m.m==='sepa'?'I\'ve sent it':'Add '+eur(+m.amt||0)}</button>`,hire?'Hiring mode':'Working mode')}
+    cancel+`<button class="btn g" data-act="dotopup" ${busy}>${m.m==='sepa'?'I\'ve sent it':d.sandbox?'Add '+eur(+m.amt||0):'Pay '+eur(+m.amt||0)+' securely'}</button>`,hire?'Hiring mode':'Working mode')}
   if(m.k==='getcard'){const hire=S.mode==='hire';const c=d.cards[S.mode];const st=m.step||0;
     const prev=`<div class="pcard" style="max-width:260px;margin:0 auto 14px">${awCard({variant:m.kind==='virtual'?'virtual':hire?'company':'personal',name:m.name||'',org:hire?un(d.acting):'',last4:'0000',uid:'w'+(++_cu)})}</div>`;
     const steps=`<div class="muted tiny" style="text-align:center;margin-bottom:10px">Step ${st+1} of 3</div>`;

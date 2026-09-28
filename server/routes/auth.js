@@ -8,7 +8,6 @@ const { one, run } = D;
 const { now, DAY, HOUR, bad, HttpError, str } = U;
 
 const router = express.Router();
-const DEV = process.env.NODE_ENV !== 'production';
 // Reused for timing-safe "user not found" comparisons.
 const DUMMY_HASH = U.hashPassword('not-a-real-password-' + U.randToken(4));
 
@@ -50,7 +49,7 @@ router.post('/register', (req, res) => {
     D.notify(id, role, 'Welcome to AfterWorc', role === 'hire' ? 'Post your first brief: a person reads it and sends up to 3 checked matches within 48 hours' : 'Build your profile, then book your interview to get checked', role === 'hire' ? 'newbrief' : 'profile');
     mail.toStaff('New sign-up', `${email} signed up (${role === 'hire' ? 'hiring' : 'working'}).`);
   }
-  res.json({ ok: true, devLink: DEV && !mail.hasSmtp() ? devLink : undefined });
+  res.json({ ok: true, devLink: mail.devLinks() ? devLink : undefined });
 });
 
 router.post('/resend', (req, res) => {
@@ -59,7 +58,7 @@ router.post('/resend', (req, res) => {
   const u = one('SELECT * FROM users WHERE email=?', email);
   let devLink;
   if (u && !u.email_verified) devLink = sendVerify(u);
-  res.json({ ok: true, devLink: DEV && !mail.hasSmtp() ? devLink : undefined });
+  res.json({ ok: true, devLink: mail.devLinks() ? devLink : undefined });
 });
 
 router.get('/verify', (req, res) => {
@@ -104,7 +103,7 @@ router.post('/forgot', (req, res) => {
     devLink = `${mail.BASE_URL}/#reset-${t}`;
     mail.send(u.email, 'Reset your AfterWorc password', `Someone asked to reset the password for your AfterWorc account.\n\nChoose a new password:\n\n${devLink}\n\nThe link works for 2 hours. If this wasn't you, ignore this e-mail; your password stays the same.`);
   }
-  res.json({ ok: true, devLink: DEV && !mail.hasSmtp() ? devLink : undefined });
+  res.json({ ok: true, devLink: mail.devLinks() ? devLink : undefined });
 });
 
 router.post('/reset', (req, res) => {

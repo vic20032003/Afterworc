@@ -3,7 +3,7 @@
 const TYPEL={task:'Task',person:'Specialist',team:'Ready team',dept:'Department'};
 const typeIc=t=>t==='task'?'task':t==='person'?'user':t==='team'?'team':'dept';
 const rateOf=p=>p.monthly?eur(p.monthly)+' / mo':p.rate?eur(p.rate)+' / h':'Rate on request';
-const sandbox=()=>`<div class="sandbox">${ic('shield',15)}<span><b>Test mode.</b> Payments and the card run on the AfterWorc test ledger until our payment and issuing partners go live. No real money moves.</span></div>`;
+const sandbox=(card)=>D().sandbox?`<div class="sandbox">${ic('shield',15)}<span><b>Test mode.</b> Payments and the card run on the AfterWorc test ledger until our payment and issuing partners go live. No real money moves.</span></div>`:card?`<div class="sandbox">${ic('shield',15)}<span><b>Card in test mode</b> until our issuing partner goes live. Card numbers are test numbers.</span></div>`:'';
 const empty=(icn,t,p,btn='')=>`<div class="empty">${ic(icn,30)}<h3>${t}</h3><p>${p}</p>${btn}</div>`;
 function greet(){const h=new Date().getHours();return h<5?'Good evening':h<12?'Good morning':h<18?'Good afternoon':'Good evening'}
 
@@ -344,7 +344,7 @@ function vCard(){
   const d=D(),m=S.mode,c=d.cards[m],hire=m==='hire',bal=d.money[m].available;
   const hd=head('Money',hire?'Balance, card, invoices and payment methods for '+d.acting+'.':'What you have earned, your card, and where money goes.',`<button class="btn g" data-act="topup">${ic('plus',15,2.2)}Top up</button>`);
   if(c.st!=='active'){
-    return `${hd}${moneyTabs()}${sandbox()}
+    return `${hd}${moneyTabs()}${sandbox(true)}
     <div class="card" style="padding:26px"><div class="cardhero">
       <div class="pcard">${cardSvg(m,{side:'front',frozen:false})}</div>
       <div><span class="mono" style="color:var(--brand2)">New · AfterWorc Mastercard® debit</span>
@@ -361,7 +361,7 @@ function vCard(){
   const qa=(act,icn,label,cls='')=>`<button class="${cls}" data-act="${act}"><span class="ic">${ic(icn,17)}</span>${label}</button>`;
   const tg=(k,l,x)=>`<div class="ctl"><div><b class="small">${l}</b><div class="muted tiny">${x}</div></div><button class="tgl ${c.tg[k]?'on':''}" role="switch" aria-checked="${c.tg[k]}" aria-label="${l}" data-act="cardtg" data-arg="${k}"></button></div>`;
   const rv=S.reveal&&S.reveal.mode===m;
-  return `${hd}${moneyTabs()}${sandbox()}
+  return `${hd}${moneyTabs()}${sandbox(true)}
   <div class="split"><div class="stack">
     <div class="card"><div class="cardhero">
       <div><div class="pcard">${cardSvg(m)}</div><div class="row" style="justify-content:center;margin-top:10px">${rv?`<span class="muted small">Details visible for 30 seconds</span>`:`<button class="btn link small" data-act="cardside">${c.side==='front'?'Show back':'Show front'}</button>`}</div></div>

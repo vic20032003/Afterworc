@@ -39,4 +39,8 @@ function send(to, subject, body) {
 }
 const toStaff = (subject, body) => send(STAFF_EMAIL, '[AfterWorc staff] ' + subject, body + `\n\nStaff console: ${BASE_URL}/admin`);
 
-module.exports = { send, toStaff, BASE_URL, hasSmtp: () => !!transport };
+/* Show verification links / codes on screen only for local development without SMTP. Never on a public host. */
+const devLinks = () => process.env.NODE_ENV !== 'production' && !transport &&
+  (process.env.DEV_LINKS === '1' || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(BASE_URL));
+
+module.exports = { send, toStaff, BASE_URL, hasSmtp: () => !!transport, devLinks };

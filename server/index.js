@@ -27,6 +27,7 @@ function createApp() {
     next();
   });
 
+  app.use('/api/stripe/webhook', require('./payments').webhook); // raw body, signature-verified; before JSON + CSRF
   app.use(express.json({ limit: '200kb' }));
   app.use(sessionMiddleware);
   app.use('/api', csrfGuard);

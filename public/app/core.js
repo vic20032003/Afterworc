@@ -77,6 +77,7 @@ async function act(type,payload={},{quiet=false,keepModal=false}={}){
     const r=await api('/account/action',{mode:S.mode,...payload,type});
     S.busy=false;
     if(r.logout){location.href='/';return r}
+    if(r.redirect){location.href=r.redirect;return r}
     if(r.state)setData(r.state);
     if(!keepModal)S.modal=null;
     if(r.go){S.modal=null;go(r.go[0],r.go[1],r.go[2])}
@@ -280,4 +281,5 @@ setInterval(()=>{
   if(!location.hash||!/^#\/(hire|work)/.test(location.hash)){S.mode=D().me.rolePref==='work'?'work':'hire';history.replaceState(null,'','#/'+S.mode+'/home')}
   render();
   if(S.route==='messages')markThreadRead();
+  if(new URLSearchParams(location.search).has('paid')){history.replaceState(null,'','/app'+location.hash);toast('Payment received. Your balance updates as soon as the bank confirms it')}
 })();

@@ -1,5 +1,8 @@
 'use strict';
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const { DATA_DIR } = require('../db');
 const D = require('../domain');
 const U = require('../util');
 const mail = require('../mail');
@@ -90,6 +93,12 @@ ACT.verify_set = b => {
   const key = oneOf(b.key, D.VERIFY_STEPS.map(s => s[0]), 'step');
   const st = oneOf(b.st, ['', 'pending', 'done'], 'status');
   const v = j(u.verify, {}); v[key] = { ...(v[key] || {}), st: st || undefined, sub: str(b.sub, { max: 120 }) || (st === 'done' ? `Done ${fmtDay(now())}` : undefined) };
+  // The privacy policy promises the ID image is deleted once the check is done; only the result is kept.
+  if (key === 'id' && st === 'done' && v.id.file) {
+    const f = one('SELECT * FROM files WHERE id=?', v.id.file);
+    if (f) { try { fs.unlinkSync(path.join(DATA_DIR, 'uploads', path.basename(f.path))); } catch { /* already gone */ } run('DELETE FROM files WHERE id=?', f.id); }
+    delete v.id.file;
+  }
   run('UPDATE users SET verify=? WHERE id=?', JSON.stringify(v), u.id);
   const s = D.mySpecialist(u.id, true);
   const done = k => v[k] && v[k].st === 'done';

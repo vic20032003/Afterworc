@@ -8,7 +8,6 @@ const { one, all, run } = D;
 const { now, HOUR, bad, HttpError, str } = U;
 
 const router = express.Router();
-const DEV = process.env.NODE_ENV !== 'production';
 
 router.get('/specialists', (req, res) => {
   res.set('Cache-Control', 'public, max-age=60');
@@ -32,7 +31,7 @@ router.post('/leads', (req, res) => {
   const code = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
   const id = run("INSERT INTO leads (kind, email, data, status, code_hash, created_at) VALUES ('assessment', ?, ?, 'unconfirmed', ?, ?)", email, JSON.stringify(data), U.sha256(code), now()).lastInsertRowid;
   mail.send(email, `Your AfterWorc code: ${code}`, `Your confirmation code is ${code}.\n\nEnter it on the page to send your request for a free technical assessment. It works for 1 hour.`);
-  res.json({ ok: true, id, devCode: DEV && !mail.hasSmtp() ? code : undefined });
+  res.json({ ok: true, id, devCode: mail.devLinks() ? code : undefined });
 });
 router.post('/leads/:id/confirm', (req, res) => {
   U.rateLimit('leadc:' + req.ip, 20, HOUR);

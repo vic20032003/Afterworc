@@ -327,7 +327,7 @@ function buildState(userId, sid) {
     acting: actingName(u), actingOrgId: u.acting_org_id || null,
     orgs: orgs.map(o => ({ id: o.id, name: o.name, country: o.country, vat: o.vat, role: o.role, members: all('SELECT u.name, u.email, m.role FROM org_members m JOIN users u ON u.id=m.user_id WHERE m.org_id=?', o.id), invites: all('SELECT email, role, created_at FROM org_invites WHERE org_id=? AND accepted_at IS NULL', o.id).map(i => ({ email: i.email, role: i.role, at: fmtDay(i.created_at) })) })),
     twofa: !!u.totp_secret, people, briefs, deals, opps, threads, notifs, money, cards, verify, prof,
-    prefs: prefsOf(u), tax: j(u.tax, {}), sessions, feePct: WORKER_FEE_PCT, sandbox: true, matcher: MATCHER
+    prefs: prefsOf(u), tax: j(u.tax, {}), sessions, feePct: WORKER_FEE_PCT, sandbox: !require('./payments').enabled(), matcher: MATCHER
   };
 }
 function uaLabel(ua) {

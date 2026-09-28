@@ -9,6 +9,7 @@ const { DATA_DIR } = require('../db');
 const D = require('../domain');
 const U = require('../util');
 const mail = require('../mail');
+const payments = require('../payments');
 const { requireUser, issueToken, destroySession, audit } = require('../auth');
 const { one, all, run, tx } = D;
 const { now, DAY, HOUR, bad, HttpError, str, int, oneOf, j, eur, fmtDay, fmtDayW, htmlEsc } = U;
@@ -465,10 +466,14 @@ ACT.verify_interview = (u, b) => {
 };
 
 /* --- money (sandbox) --- */
-ACT.topup = (u, b) => {
+ACT.topup = async (u, b) => {
   needVerified(u);
   const m = mode(b.mode); const a = int(b.amount, { min: 1, max: 100000, name: 'amount' });
   const method = oneOf(b.method, ['bank', 'sepa', 'card', 'wallet'], 'payment method');
+  if (payments.enabled() && method !== 'sepa') {
+    if (a < 5) throw bad('Top up at least €5');
+    return { redirect: await payments.createCheckout(u, m, a) };
+  }
   const lab = { bank: 'bank link', sepa: 'SEPA transfer', card: 'card', wallet: 'phone wallet' }[method];
   if (method === 'sepa') {
     D.addTx(u.id, m, 'Top up · SEPA transfer', a, 'Pending', `AW-${u.id}-${m.toUpperCase()}`);
