@@ -114,7 +114,7 @@ function vBrief(id){
       <div class="row wrapf" style="margin-top:14px">${sup?`<button class="btn ghost sm" data-go="messages" data-arg="${sup.id}">${ic('msg',15)}Message ${first(b.matcher.name)}</button>`:''}<button class="btn ghost sm" data-act="closebrief" data-arg="${b.id}">Close brief</button></div></div></div></div>
       <div class="card"><h3>While you wait</h3><ul class="small" style="margin:8px 0 0;padding-left:18px;line-height:1.8"><li>Send files or links that help (current site, brand guide) in Messages</li><li>Tell us who decides and who signs (acting as <b>${b.signedAs}</b>)</li><li>Want to see people now? <button class="btn link small" data-go="find">Browse checked specialists</button></li></ul></div>`;
   } else if(b.status==='shortlist'||b.status==='hired'){
-    const cands=b.shortlist.map((k,i)=>{const p=P(k);return `<div class="cand ${i===0?'top':''}">${i===0?`<span class="best">${esc(first(b.matcher.name).toUpperCase())}'S PICK</span>`:''}
+    const cands=b.shortlist.map((k,i)=>{const p=P(k);return `<div class="cand ${i===0?'top':''}">${i===0?`<span class="best">${first(b.matcher.name).toUpperCase()}'S PICK</span>`:''}
       <div class="row"><span class="avatar ${i?'alt':''}">${initials(p.name)}</span><div class="grow"><h3 style="font-size:15px">${p.name}</h3><div class="muted small">${p.role}</div></div></div>
       ${seal(p.lv)}${p.checkedBy?`<div class="muted tiny">Checked by ${p.checkedBy} · ${p.checkedOn}</div>`:''}
       <div class="kv"><span>Rate</span><span>${rateOf(p)}</span><span>Availability</span><span>${p.avail}</span><span>Deals done</span><span>${p.deals}${p.rating?' · ★ '+p.rating:''}</span><span>Based in</span><span>${p.city||'EU'}</span></div>
@@ -322,7 +322,7 @@ function vMoneyHire(){
 }
 function vMoneyWork(){
   const d=D(),m=d.money.work,tax=d.tax;
-  return `${head('Money','What you have earned, your card, and where money goes.',`<button class="btn ghost" data-act="topup">${ic('plus',15,2.2)}Top up</button><button class="btn g" data-act="withdraw" ${m.available>0?'':'disabled'}>${ic('dl',15)}Withdraw ${eur(m.available)}</button>`)}
+  return `${head('Money','What you have earned, your card, and where money goes.',`<button class="btn ghost" data-act="topup">${ic('plus',15,2.2)}Top up</button><button class="btn g" data-act="withdraw" ${m.withdrawable>0?'':'disabled'}>${ic('dl',15)}Withdraw ${eur(m.withdrawable)}</button>`)}
   ${moneyTabs()}${sandbox()}
   <div class="grid g3">
     <div class="bal"><span class="l">Available now</span><b>${eur(m.available)}</b><p>Spend it with your card now, or withdraw: 1–2 business days.</p></div>

@@ -82,8 +82,25 @@ function totpVerify(secret, code, t = now()) {
   code = String(code || '').replace(/\s/g, '');
   if (!/^\d{6}$/.test(code)) return false;
   const c = Math.floor(t / 30000);
-  for (const d of [-1, 0, 1]) if (crypto.timingSafeEqual(Buffer.from(totpAt(secret, c + d)), Buffer.from(code))) return true;
+  for (const d of [-1, 0, 1]) if (crypto.timingSafeEqual(Buffer.from(totpAt(secret, c + d)), Buffer.from(code))) return c + d;
   return false;
+}
+/* Failure gates: count only failed attempts, block after max failures in the window. */
+const fails = new Map();
+function gateCheck(key, max) { const b = fails.get(key); if (b && b.reset > now() && b.n >= max) throw new HttpError(429, 'Too many attempts. Wait a few minutes and try again.'); }
+function gateFail(key, windowMs) { let b = fails.get(key); if (!b || b.reset < now()) { b = { n: 0, reset: now() + windowMs }; fails.set(key, b); } b.n++; }
+const gateClear = key => fails.delete(key);
+setInterval(() => { const t = now(); for (const [k, b] of fails) if (b.reset < t) fails.delete(k); }, 60000).unref();
+/* At most 5 wrong codes per 15 minutes per user; with once=true (log-in) each code works only once. */
+const lastTotp = new Map();
+function totpCheck(userId, secret, code, once = false) {
+  const key = 'totp:' + userId;
+  gateCheck(key, 5);
+  const c = totpVerify(secret, code);
+  if (c === false || (once && c <= (lastTotp.get(userId) ?? -1))) { gateFail(key, 15 * 60000); return false; }
+  if (once) lastTotp.set(userId, c);
+  gateClear(key);
+  return true;
 }
 
 /* ---------- rate limiting (in memory, per key) ---------- */
@@ -124,6 +141,6 @@ const htmlEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '
 
 module.exports = {
   now, DAY, HOUR, HttpError, bad, j, str, email, int, oneOf, randToken, sha256,
-  hashPassword, verifyPassword, newTotpSecret, totpVerify, totpAt, rateLimit,
+  hashPassword, verifyPassword, newTotpSecret, totpVerify, totpCheck, totpAt, rateLimit, gateCheck, gateFail, gateClear,
   fmtDay, fmtDayW, fmtDayTime, fmtDate, fmtAgo, inDays, eur, initials, htmlEsc
 };

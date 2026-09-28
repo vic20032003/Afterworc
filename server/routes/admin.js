@@ -147,12 +147,14 @@ ACT.link_specialist = b => {
   const s = D.specById(str(b.specialistId, { max: 40 })); const u = one('SELECT * FROM users WHERE email=?', U.email(b.email));
   if (!s || !u) throw bad('Specialist or user not found');
   if (one('SELECT 1 FROM specialists WHERE user_id=?', u.id)) throw bad('That user already has a profile');
+  // Money funded before linking was never held on a user's balance; linking now would unbalance the ledger.
+  if (one("SELECT 1 FROM milestones m JOIN deals d ON d.id=m.deal_id WHERE d.specialist_id=? AND m.status IN ('funded','inprogress','delivered','changes')", s.id)) throw bad('Finish or release the funded milestones for this specialist before linking an account');
   run('UPDATE specialists SET user_id=? WHERE id=?', u.id, s.id);
 };
 
 router.post('/action', async (req, res) => {
   const b = req.body || {};
-  const fn = ACT[b.type]; if (!fn) throw bad('Unknown action');
+  const fn = typeof b.type === 'string' && Object.hasOwn(ACT, b.type) ? ACT[b.type] : null; if (!fn) throw bad('Unknown action');
   await fn(b, req);
   audit(req, 'admin:' + b.type, JSON.stringify(b).slice(0, 400));
   res.json({ ok: true });

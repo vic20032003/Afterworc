@@ -40,8 +40,9 @@ const eur=n=>'€'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:n%
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 /* Undo esc() for values copied from (escaped) state into editable fields. */
 const un=s=>String(s??'').replace(/&(amp|lt|gt|quot|#39);/g,(m,k)=>({amp:'&',lt:'<',gt:'>',quot:'"','#39':"'"}[k]));
-const initials=n=>un(n).split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase()||'?';
-const first=n=>un(n).split(/\s+/)[0];
+/* Both return HTML-escaped text: safe to interpolate. */
+const initials=n=>esc(un(n).split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase()||'?');
+const first=n=>esc(un(n).split(/\s+/)[0]);
 /* Every string from the server is escaped once on arrival, so templates can interpolate state directly. */
 const clean=v=>typeof v==='string'?esc(v):Array.isArray(v)?v.map(clean):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,clean(x)])):v;
 
@@ -52,7 +53,7 @@ const S={
  wiz:null, prof:null, review:{text:'',note:''}, prop:{}, set:{}, help:{topic:'A deal or payment',text:''}
 };
 const D=()=>S.data;
-const P=id=>(S.data.people[id])||{id,name:'Specialist',role:'',lv:'registered',skills:[],deals:0,rating:null,avail:'',city:''};
+const P=id=>(Object.hasOwn(S.data.people,id)&&S.data.people[id])||{id,name:'Specialist',role:'',lv:'registered',skills:[],deals:0,rating:null,avail:'',city:''};
 const freshWiz=()=>({id:null,step:0,type:null,line:'',ai:false,title:'',desc:'',area:'Development',profs:['Backend Developer'],roles:{},budget:null,start:'Within 2 weeks',opt:{countries:'Anywhere in the EU',visibility:'Checked specialists + AfterWorc shortlist (recommended)',deadline:'',nda:false},pq:''});
 S.wiz=freshWiz();
 

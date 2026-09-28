@@ -116,7 +116,7 @@ function vPublic(id){
   const d=D(),me=id==='me';
   let p;
   if(me){const pr=d.prof||{};p={id:'me',name:d.me.name,role:pr.headline||'Your headline',lv:pr.level==='checked'?'checked':pr.level==='verified'?'id':'registered',rate:pr.rate,city:pr.city||'',avail:pr.avail||'',deals:0,rating:null,skills:pr.skills||[],bio:pr.about||''}}
-  else p=d.people[id];
+  else p=Object.hasOwn(d.people,id)?d.people[id]:null;
   if(!p)return empty('user','Profile not found','This profile is not public.','<button class="btn g" data-go="find">Browse specialists</button>');
   return `${head(me?'Your public page (preview)':'Specialist profile','',me?`<button class="btn ghost" data-go="profile">Edit</button>`:'',`<button data-go="home">Home</button> / ${p.name}`)}
   <div class="split"><div class="stack">

@@ -180,3 +180,34 @@ test('account deletion', async () => {
   const r = await x.act('account_close', { how: 'delete', confirm: 'DELETE', password: 'correct-horse-battery' }); assert.equal(r.logout, true);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM users WHERE email=?').get('leaver@example.com').n, 0);
 });
+
+test('security regressions from review', async () => {
+  const x = client(); await x.signup('sec@example.com', 'hire');
+  for (const t of ['constructor', '__proto__', 'hasOwnProperty', 'toString']) {
+    const r = await x.post('/api/account/action', { type: t });
+    assert.equal(r.status, 400, t); assert.ok(!JSON.stringify(r.data).includes('pass_hash'));
+  }
+  assert.equal((await admin.post('/api/admin/action', { type: 'constructor' })).status, 400);
+  // Malformed input is a 400, not a 500
+  assert.equal((await x.post('/api/account/action', { type: 'prefs_save', email: 'x' })).status, 200);
+  assert.equal((await x.post('/api/account/action', { type: 'verify_refs', refs: [null, null] })).status, 400);
+  // Deals only with published specialists, never with yourself, never on someone else's brief
+  const hidden = db.prepare("SELECT id FROM specialists WHERE published=0 LIMIT 1").get();
+  if (hidden) await assert.rejects(x.act('deal_start', { specialistId: hidden.id, model: 'fixed', first: 'x1', amount: 10 }), /not found/);
+  await assert.rejects(x.act('deal_start', { briefId: briefId, specialistId: 'mk', model: 'fixed', first: 'x1', amount: 10 }), /Brief not found/);
+  // Top-ups can't be withdrawn: only released earnings
+  const w = client(); await w.signup('sec-w@example.com', 'work');
+  const b = await w.act('twofa_begin'); await w.act('twofa_confirm', { code: totpNow(b.twofa.secret) });
+  const secret = db.prepare('SELECT totp_secret FROM users WHERE email=?').get('sec-w@example.com').totp_secret;
+  await w.act('tax_save', { iban: 'EE382200221020145685' });
+  await w.act('topup', { mode: 'work', amount: 500, method: 'card' });
+  await assert.rejects(w.act('withdraw', { code: totpNow(secret) }), /Nothing to withdraw/);
+  // Wrong 2FA codes lock step-up actions after 5 tries
+  for (let i = 0; i < 5; i++) await assert.rejects(w.act('card_reveal', { mode: 'work', what: 'pin', code: '000001' }));
+  const locked = await w.post('/api/account/action', { type: 'card_reveal', mode: 'work', what: 'pin', code: totpNow(secret) });
+  assert.equal(locked.status, 429);
+  // Login limit counts failures only, per IP + e-mail
+  const y = client();
+  for (let i = 0; i < 8; i++) await y.post('/api/auth/login', { email: 'nobody@example.com', password: 'bad' });
+  assert.equal((await y.post('/api/auth/login', { email: 'nobody@example.com', password: 'bad' })).status, 429);
+});

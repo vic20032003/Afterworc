@@ -55,7 +55,7 @@ Without `SMTP_URL`, e-mails (verification links, reset links, codes) are printed
 
 **Top-ups can be real.** Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and add the webhook `https://<your-domain>/api/stripe/webhook` in the Stripe dashboard (events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`). Card, bank-link and wallet top-ups then open Stripe Checkout. A balance is credited only from the signed webhook, once per payment, and only when the paid amount matches. SEPA top-ups are confirmed by staff in the console when the transfer arrives.
 
-**Payouts** are requested in the account (2FA and an IBAN required) and listed under Staff console › Money. Staff send the bank transfer and mark it paid.
+**Payouts** are requested in the account (2FA and an IBAN required). Only earnings released from deals can be withdrawn; top-ups stay on the platform. Requests are listed under Staff console › Money. Staff send the bank transfer and mark it paid.
 
 **Still test mode:** without Stripe keys, top-ups are credited instantly on a test ledger, and the account shows a "Test mode" note. The **AfterWorc Mastercard** always runs in test mode until an issuing partner is connected: card numbers are Mastercard test-range numbers and no card payments happen. To go live with cards, replace the `card_*` actions in `server/routes/account.js` with your issuer's API.
 

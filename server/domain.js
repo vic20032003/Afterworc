@@ -290,6 +290,7 @@ function buildState(userId, sid) {
       pending: all("SELECT COALESCE(SUM(amount),0) s FROM transactions WHERE user_id=? AND mode=? AND status='Pending'", userId, m)[0].s
     };
   }
+  money.work.withdrawable = Math.max(0, Math.min(money.work.available, one("SELECT COALESCE(SUM(amount),0) s FROM transactions WHERE user_id=? AND mode='work' AND amount>0 AND descr LIKE 'Released%'", userId).s + one("SELECT COALESCE(SUM(amount),0) s FROM transactions WHERE user_id=? AND mode='work' AND descr='Paid out to bank'", userId).s));
   money.hire.inv = all('SELECT * FROM invoices WHERE user_id=? ORDER BY id DESC', userId).map(i => [i.number, fmtDay(i.created_at), i.descr, i.amount]);
   money.hire.nextInvoice = all("SELECT COALESCE(SUM(monthly),0) s FROM deals WHERE client_user_id=? AND kind='dept' AND status='active'", userId)[0].s;
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);

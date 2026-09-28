@@ -21,7 +21,7 @@ const mode = v => oneOf(v, ['hire', 'work'], 'mode');
 const needVerified = u => { if (!u.email_verified) throw bad('Confirm your e-mail address first. We sent you a link.'); };
 const need2fa = (u, code) => {
   if (!u.totp_secret) throw bad('Turn on two-factor authentication first', { need2fa: true });
-  if (!U.totpVerify(u.totp_secret, code)) throw bad('That code did not work. Check your authenticator app.');
+  if (!U.totpCheck(u.id, u.totp_secret, code)) throw bad('That code did not work. Check your authenticator app.');
 };
 function ownDeal(user, id, side) {
   const d = D.dealRow(int(id, { min: 1, name: 'deal' }));
@@ -235,9 +235,11 @@ ACT.request_proposal = (u, b) => {
 ACT.deal_start = (u, b) => {
   needVerified(u);
   const spec = D.specById(str(b.specialistId, { max: 40 }));
-  if (!spec) throw bad('Specialist not found');
+  if (!spec || !spec.published) throw bad('Specialist not found');
+  if (spec.user_id === u.id) throw bad('You cannot start a deal with yourself');
   const briefId = b.briefId ? int(b.briefId, { min: 1 }) : null;
   const brief = briefId ? one('SELECT * FROM briefs WHERE id=? AND user_id=?', briefId, u.id) : null;
+  if (briefId && !brief) throw bad('Brief not found');
   if (brief && !j(brief.shortlist, []).includes(spec.id) && !one("SELECT 1 FROM opps WHERE brief_id=? AND specialist_id=? AND status='sent'", brief.id, spec.id)) throw bad('This person is not on the shortlist');
   const model = oneOf(b.model, ['hourly', 'monthly', 'fixed'], 'payment model');
   const first = str(b.first, { min: 2, max: 120, name: 'the first milestone' });
@@ -450,7 +452,7 @@ ACT.verify_id = (u, b) => {
   return { toast: 'Document received. We check it within 1 business day' };
 };
 ACT.verify_refs = (u, b) => {
-  const refs = (Array.isArray(b.refs) ? b.refs : []).slice(0, 3).map(r => ({ name: str(r.name, { min: 2, max: 80, name: 'referee name' }), email: U.email(r.email), company: str(r.company, { max: 80 }) }));
+  const refs = (Array.isArray(b.refs) ? b.refs : []).slice(0, 3).map(r => r && typeof r === 'object' ? r : {}).map(r => ({ name: str(r.name, { min: 2, max: 80, name: 'referee name' }), email: U.email(r.email), company: str(r.company, { max: 80 }) }));
   if (refs.length < 2) throw bad('Add two referees');
   setVerify(u.id, 'refs', { st: 'pending', sub: `${refs.length} referees · we call them`, refs });
   mail.toStaff(`References submitted: ${u.name}`, refs.map(r => `${r.name} <${r.email}> ${r.company}`).join('\n'));
@@ -483,14 +485,21 @@ ACT.topup = async (u, b) => {
   tx(() => { D.moveBal(u.id, m, a, 0); D.addTx(u.id, m, 'Top up · ' + lab, a, 'Completed · test mode'); })();
   return { toast: `${eur(a)} added to your ${m === 'hire' ? 'company' : 'Working'} balance` };
 };
+/* Only money earned through deals can go to a bank; top-ups can be spent on the platform but not withdrawn. */
+function withdrawable(uid) {
+  const earned = one("SELECT COALESCE(SUM(amount),0) s FROM transactions WHERE user_id=? AND mode='work' AND amount>0 AND descr LIKE 'Released%'", uid).s;
+  const paid = -one("SELECT COALESCE(SUM(amount),0) s FROM transactions WHERE user_id=? AND mode='work' AND descr='Paid out to bank'", uid).s;
+  return Math.max(0, Math.min(D.bal(uid, 'work').available, earned - paid));
+}
 ACT.withdraw = (u, b) => {
   need2fa(u, b.code);
-  const bl = D.bal(u.id, 'work'); if (bl.available <= 0) throw bad('Nothing to withdraw');
+  const amt = withdrawable(u.id); if (amt <= 0) throw bad('Nothing to withdraw. Only earnings released from deals can be paid out.');
   const tax = j(u.tax, {});
-  tx(() => { D.moveBal(u.id, 'work', -bl.available, 0); D.addTx(u.id, 'work', 'Paid out to bank', -bl.available, `To ${tax.iban ? '••' + tax.iban.slice(-2) : 'your bank'} · processing`); })();
-  mail.toStaff('Payout requested', `${u.email} withdrew ${eur(bl.available)} to ${tax.iban || '(no IBAN saved)'} (${tax.holder || u.name}).`);
-  audit({ user: u, ip: '' }, 'withdraw', eur(bl.available));
-  return { toast: 'On its way to your bank · 1–2 business days' };
+  if (!tax.iban) throw bad('Add your IBAN in Settings › Tax & invoicing first');
+  tx(() => { D.moveBal(u.id, 'work', -amt, 0); D.addTx(u.id, 'work', 'Paid out to bank', -amt, `To ••${tax.iban.slice(-2)} · processing`); })();
+  mail.toStaff('Payout requested', `${u.email} withdrew ${eur(amt)} to ${tax.iban} (${tax.holder || u.name}).`);
+  audit({ user: u, ip: '' }, 'withdraw', eur(amt));
+  return { toast: `${eur(amt)} on its way to your bank · 1–2 business days` };
 };
 
 /* --- card (sandbox: issued by the test issuer) --- */
@@ -551,7 +560,7 @@ ACT.twofa_begin = async (u) => {
 };
 ACT.twofa_confirm = (u, b) => {
   const x = D.userById(u.id);
-  if (!x.totp_pending || !U.totpVerify(x.totp_pending, b.code)) throw bad('That code did not work. Check your authenticator app.');
+  if (!x.totp_pending || !U.totpCheck(u.id, x.totp_pending, b.code)) throw bad('That code did not work. Check your authenticator app.');
   run('UPDATE users SET totp_secret=totp_pending, totp_pending=NULL WHERE id=?', u.id);
   mail.send(u.email, 'Two-factor authentication is on', 'Two-factor authentication is now on for your AfterWorc account. If this wasn\'t you, contact info@afterworc.com right away.');
   return { toast: 'Two-factor authentication on' };
@@ -586,6 +595,8 @@ ACT.sessions_revoke = (u, b, req) => {
 };
 ACT.prefs_save = (u, b) => {
   const p = D.prefsOf(u);
+  const obj = x => x && typeof x === 'object' && !Array.isArray(x);
+  if (!obj(b.email)) b.email = null; if (!obj(b.app)) b.app = null; if (!obj(b.cookies)) b.cookies = null;
   for (const k of D.NOTIF_KEYS) {
     if (b.email && k in b.email) p.email[k] = !!b.email[k];
     if (b.app && k in b.app && !['shortlist', 'delivery', 'payment'].includes(k)) p.app[k] = !!b.app[k];
@@ -657,7 +668,7 @@ ACT.account_close = (u, b, req, res) => {
 
 router.post('/action', async (req, res) => {
   const b = req.body || {};
-  const fn = ACT[b.type];
+  const fn = typeof b.type === 'string' && Object.hasOwn(ACT, b.type) ? ACT[b.type] : null;
   if (!fn) throw bad('Unknown action');
   if (req.user.closed_at) throw new HttpError(403, 'Account closed');
   U.rateLimit('act:' + req.user.id, 120, 60000);
