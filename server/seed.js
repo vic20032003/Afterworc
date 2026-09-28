@@ -171,5 +171,14 @@ function seedSkills() {
   }
 }
 
-function run_() { seedDirectory(); seedSkills(); seedAdmin(); seedDemo(); }
+/* Users created before verification levels existed: derive the level from the checks already done. */
+function backfillLevels() {
+  for (const u of db.prepare("SELECT id, verify FROM users WHERE level='registered' AND verified_at IS NULL").all()) {
+    const v = U.j(u.verify, {}); const done = k => v[k] && v[k].st === 'done';
+    const level = done('checked') ? 'checked' : done('id') ? 'verified' : null;
+    if (level) db.prepare('UPDATE users SET level=?, verified_at=? WHERE id=?').run(level, now(), u.id);
+  }
+}
+
+function run_() { seedDirectory(); seedSkills(); seedAdmin(); seedDemo(); backfillLevels(); }
 module.exports = { run: run_, DIRECTORY };

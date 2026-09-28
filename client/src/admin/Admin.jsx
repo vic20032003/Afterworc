@@ -143,7 +143,7 @@ function UserCard({ u, act }) {
   const pending = Object.values(u.verify || {}).some(v => v && v.st === 'pending');
   return (
     <details className="card"><summary style={{ cursor: 'pointer', listStyle: 'none' }}><div className="row between wrapf"><div className="row">
-      <span className="avatar sm">{u.avatar ? <img src={u.avatar} alt="" /> : (u.name || u.email).slice(0, 2).toUpperCase()}</span>
+      <span className="avatar sm">{u.avatar ? <img src={u.avatar} alt="" /> : (u.name || u.email).split(/[\s@.]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
       <div><b>{u.name}</b> <span className="muted small">{u.email} · joined {u.at} · prefers {u.role_pref === 'hire' ? 'hiring' : 'working'}</span></div></div>
       <span className="row wrapf">{!u.email_verified && <Pill c="wait">E-mail unconfirmed</Pill>}{u.twofa ? <Pill c="ok">2FA</Pill> : null}{u.is_admin ? <Pill c="info">Staff</Pill> : null}
         <Pill c={u.level === 'checked' ? 'ok' : u.level === 'verified' ? 'info' : ''}>{(LEVELS.find(x => x[0] === u.level) || LEVELS[0])[1]}</Pill>
