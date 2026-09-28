@@ -94,8 +94,8 @@ export function HireHome() {
 
 /* ================= Working ================= */
 export function profComplete(p) {
-  if (!p) return { pct: 0, left: [t('Set up your profile')] };
-  const checks = [[t('Add a headline'), !!p.headline], [t('Add your main profession'), !!p.profession], [t('Add an about text'), !!p.about], [t('Add at least 3 skills'), p.skills.length >= 3], [t('Add your rate'), !!p.rate], [t('Add a work sample'), !!p.portfolio || (p.portfolioCount || 0) > 0]];
+  if (!p || !p.id) return { pct: 0, left: [t('Set up your profile')] };
+  const checks = [[t('Add a headline'), !!p.headline], [t('Add your main profession'), !!p.profession], [t('Add an about text'), !!p.about], [t('Add at least 3 skills'), (p.skills || []).length >= 3], [t('Add your rate'), !!p.rate], [t('Add a work sample'), !!p.portfolio || (p.portfolioCount || 0) > 0]];
   return { pct: Math.round(checks.filter(c => c[1]).length / checks.length * 100), left: checks.filter(c => !c[1]).map(c => c[0]) };
 }
 function workNext(data) {

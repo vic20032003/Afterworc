@@ -16,7 +16,7 @@ router.get('/specialists', (req, res) => {
   res.set('Cache-Control', 'public, max-age=60');
   const rows = all("SELECT * FROM specialists WHERE published=1 ORDER BY level='checked' DESC, deals DESC, name");
   res.json(rows.map(s => {
-    const v = D.specView(s);
+    const v = D.specView(s, { withPortfolio: true });
     return pubSpec(s, v);
   }));
 });
@@ -58,7 +58,7 @@ router.get('/rtc', (req, res) => {
   res.json({ iceServers: ice });
 });
 
-const TYPES = { task: 'A task', person: 'A specialist', team: 'A ready team', dept: 'A department' };
+const TYPES = { task: 'A task', person: 'A specialist', team: 'A ready team', dept: 'A department', eor: 'Hire abroad (EOR)' };
 const CHANNELS = ['Email only', 'Telegram', 'WhatsApp', 'Phone'];
 
 /* Free assessment request: step 1 stores it and e-mails a 6-digit code; step 2 confirms it. */

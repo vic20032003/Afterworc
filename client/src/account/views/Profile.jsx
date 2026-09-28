@@ -188,7 +188,7 @@ export function Profile() {
       <div className="row" style={{ marginTop: 12 }}><Avatar name={p.name || data.me.name} src={data.me.avatar} /><div><b>{p.name}</b><div className="muted small">{p.headline || t('Your headline')}</div></div></div>
       <div style={{ marginTop: 8 }}>{lv ? <Seal lv={lv} /> : <span className="pill">{t('Registered')}</span>}</div>
       <div className="kv" style={{ marginTop: 10 }}><span>{t('Rate')}</span><span>{p.rate ? eur(p.rate) + ' ' + t('/ h') : '—'}</span><span>{t('Available')}</span><span>{tr(p.avail)}</span><span>{t('Portfolio')}</span><span>{data.portfolio.length}</span></div>
-      <div className="chips" style={{ marginTop: 10 }}>{p.skills.map(s => <span key={s} className="chip">{s}</span>)}</div></div>
+      <div className="chips" style={{ marginTop: 10 }}>{p.skills.map(s => { const ok = data.prof && data.prof.skillStatus && data.prof.skillStatus[s] === 'approved'; return <span key={s} className={'chip ' + (ok ? '' : 'pend')} title={ok ? undefined : t('New skill: shown publicly after a check by our team')}>{s}</span>; })}</div></div>
       <div className="card small"><b>{t('Status')}: {{ draft: t('Draft'), submitted: t('Submitted · in review'), published: t('Public') }[st]}</b><p className="muted" style={{ marginTop: 4 }}>{st === 'published' ? t('Clients can find you in search and request proposals. Changes are live when you save.') : st === 'submitted' ? t('Our team reviews it after your ID check. You can keep editing.') : t('Only you can see it. Submit it when the steps are done.')}</p></div></div></div>
   </>);
 }

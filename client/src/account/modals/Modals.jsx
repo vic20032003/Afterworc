@@ -8,10 +8,10 @@ import { Modal, Cancel, CodeField, Need2fa, Go2fa, Sandbox, CardArt, slots } fro
 
 function useForm(init) { const [f, setF] = useState(init); return [f, patch => setF(x => ({ ...x, ...patch }))]; }
 
-function TopUp() {
+function TopUp({ amt }) {
   const { data, mode, act, busy } = useApp();
   const hire = mode === 'hire';
-  const [f, set] = useForm({ amt: hire ? 2000 : 100, m: 'bank' });
+  const [f, set] = useForm({ amt: +amt > 0 ? +amt : hire ? 2000 : 100, m: 'bank' });
   const meth = [['bank', t('Estonian bank link'), t('Instant · no fee')], ['sepa', t('SEPA transfer'), t('1 business day · no fee')], ['card', t('Debit or credit card'), t('Instant')], ['wallet', 'Apple Pay / Google Pay', t('Instant')]];
   return <Modal title={hire ? t('Top up {org} balance', { org: data.acting }) : t('Top up your Working balance')} sub={hire ? t('Hiring mode') : t('Working mode')}
     footer={<><Cancel /><button className="btn g" disabled={busy} onClick={() => act('topup', { amount: f.amt, method: f.m })}>{f.m === 'sepa' ? t("I've sent it") : data.sandbox ? t('Add {amount}', { amount: eur(+f.amt || 0) }) : t('Pay {amount} securely', { amount: eur(+f.amt || 0) })}</button></>}>
@@ -90,7 +90,7 @@ function Fund({ d: dealId, i }) {
   const x = data.deals.find(y => y.id === dealId); const ms = x && x.ms.find(y => y.id === i);
   if (!ms || ms.st !== 'unfunded') return null;
   const short = data.money.hire.available < ms.amt;
-  return <Modal title={t('Fund: {name}', { name: ms.n })} footer={<><Cancel />{short ? <button className="btn g" onClick={() => setModal({ k: 'topup' })}>{t('Top up')}</button> : <button className="btn g" disabled={busy} onClick={() => act('ms_fund', { dealId, msId: i })}>{t('Fund {amount}', { amount: eur(ms.amt) })}</button>}</>}>
+  return <Modal title={t('Fund: {name}', { name: ms.n })} footer={<><Cancel />{short ? <button className="btn g" onClick={() => setModal({ k: 'topup', amt: ms.amt - data.money.hire.available })}>{t('Top up')}</button> : <button className="btn g" disabled={busy} onClick={() => act('ms_fund', { dealId, msId: i })}>{t('Fund {amount}', { amount: eur(ms.amt) })}</button>}</>}>
     <p><b>{ms.n}</b> · {person(data, x.with).name}</p>
     <div className="feeline" style={{ marginTop: 12 }}><span>{t('Milestone')}</span><span>{eur(ms.amt)}</span><span>{t('AfterWorc fee')}</span><span>{t('included')}</span><span>{t('Contract fee')}</span><span>€0</span><span className="tot">{t('Charged now')}</span><span className="tot">{eur(ms.amt)}</span></div>
     <p className="small" style={{ marginTop: 12 }}>{t('From your balance ({amount} available). Held until you accept the delivery.', { amount: eur(data.money.hire.available) })}</p>
@@ -245,7 +245,7 @@ export default function Modals() {
   const key = m.k + JSON.stringify(m).length;
   switch (m.k) {
     case 'need2fa': return <Modal title={t('Two-factor authentication needed')} footer={<><Cancel /><Go2fa /></>}><Need2fa /></Modal>;
-    case 'topup': return <TopUp key={key} />;
+    case 'topup': return <TopUp key={key} amt={m.amt} />;
     case 'getcard': return <GetCard key={key} />;
     case 'reveal': return <Reveal key={key} what={m.what} />;
     case 'pinshow': return <PinShow pin={m.pin} />;

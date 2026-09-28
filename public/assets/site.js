@@ -48,11 +48,11 @@ let uidN=0;const card=(o)=>awCard(Object.assign({uid:'k'+(++uidN)},o));
 const DEPTS=[
  {k:'mkt',n:'Marketing',ic:'mega',size:'4 people, one team lead',roles:['Marketing Lead','SMM Manager','Content Writer','Performance Marketer'],tasks:['Social media and community','Content and copywriting','Paid acquisition','Email and lifecycle','Growth reporting']},
  {k:'dev',n:'Development',ic:'code',size:'5 people, one team lead',roles:['Team Lead','Senior Developer','Developer','DevOps Engineer','QA Engineer'],tasks:['Product development','Infrastructure and deployment','Data and integrations','Testing and QA','Maintenance and support']},
- {k:'des',n:'Design',ic:'pen',size:'3 people, one team lead',roles:['Design Lead','UI / UX Designer','Graphic Designer'],tasks:['Product design, UI and UX','Graphics and brand assets','Creative production']},
+ {k:'pay',n:'Payments',ic:'card',size:'5 people, one team lead',roles:['Head of Payments','Payments Operations Specialist','Payment Integrations Engineer','AML / KYC Analyst','Reconciliation Analyst'],tasks:['PSP and acquirer integrations','Payment operations and reconciliation','AML, KYC and transaction monitoring','Chargebacks and disputes','Safeguarding and scheme reporting']},
  {k:'ops',n:'Business Support',ic:'brief',size:'4 people, one team lead',roles:['Project Manager','Operations Manager','Customer Support','Admin Assistant'],tasks:['Project management','Day-to-day operations','Customer support','Back office']}
 ];
-const AREAS={Development:['Backend Developer','Frontend Developer','Fullstack Developer','Mobile Developer','DevOps Engineer','QA Engineer','Team Lead'],Design:['UI/UX Designer','Product Designer','Graphic Designer','Brand Designer','Motion Designer'],Marketing:['Marketing Lead','SMM Manager','Content Writer','Performance Marketer','SEO Specialist'],'Business Support':['Project Manager','Product Manager','Business Analyst','Customer Support','Accountant'],Content:['Copywriter','Translator','Technical Writer','Video Editor'],'Data & Infrastructure':['Data Engineer','Data Analyst','Cloud Engineer','Database Administrator'],'Quality & Security':['QA Automation Engineer','Security Engineer','Penetration Tester']};
-const S={me:null,busy:false,forgot:{email:'',done:false},reset:{token:'',pw:''},lang:'en',page:'home',reg:{role:'hire',email:'',pw:'',show:false,terms:false,news:false,done:false,ctx:''},login:{email:'',pw:''},f:{area:'All',level:'any',now:false,max:80,sort:'match'},person:null,dept:'dev',ctab:'biz',tg:{online:true,contactless:true,atm:false,abroad:true},frozen:false,form:{hire:{step:0,type:'team',need:'',email:'',chan:'Email only',done:false},build:{step:0,prof:'',years:'3–5',link:'',email:'',chan:'Email only',done:false}},menu:false,q:'',htab:'hire'};
+const AREAS={Payments:['Payments Operations Specialist','Payment Integrations Engineer','AML / KYC Analyst','Compliance Officer','Reconciliation Analyst','Head of Payments'],Development:['Backend Developer','Frontend Developer','Fullstack Developer','Mobile Developer','DevOps Engineer','QA Engineer','Team Lead'],Design:['UI/UX Designer','Product Designer','Graphic Designer','Brand Designer','Motion Designer'],Marketing:['Marketing Lead','SMM Manager','Content Writer','Performance Marketer','SEO Specialist'],'Business Support':['Project Manager','Product Manager','Business Analyst','Customer Support','Accountant'],Content:['Copywriter','Translator','Technical Writer','Video Editor'],'Data & Infrastructure':['Data Engineer','Data Analyst','Cloud Engineer','Database Administrator'],'Quality & Security':['QA Automation Engineer','Security Engineer','Penetration Tester']};
+const S={me:null,busy:false,forgot:{email:'',done:false},reset:{token:'',pw:''},lang:'en',page:'home',reg:{role:'hire',email:'',pw:'',show:false,terms:false,news:false,done:false,ctx:''},login:{email:'',pw:''},f:{area:'All',level:'any',now:false,max:80,sort:'match'},person:null,dept:'pay',ctab:'biz',tg:{online:true,contactless:true,atm:false,abroad:true},frozen:false,form:{hire:{step:0,type:'team',need:'',email:'',chan:'Email only',done:false},build:{step:0,prof:'',years:'3–5',link:'',email:'',chan:'Email only',done:false}},menu:false,q:'',htab:'hire'};
 
 /* ================= shell ================= */
 const NAV=[['search','Find specialists'],['how','How it works'],['card','AfterWorc card',1],['about','About']];
@@ -96,7 +96,7 @@ function footer(){
   return `<footer class="ftr"><div class="wrap">
     <div class="cols">
       <div class="fbrand"><a href="#home" class="flogo">${LOGO_SVG}</a>
-        <p>Verified IT professionals, delivery you can hold someone to.</p>
+        <p>Build your workforce. We run the rest.</p>
         <div class="socials">${Object.keys(SOC).map(k=>`<a href="${SOC[k][0]}" target="_blank" rel="noopener" aria-label="${k}">${socIc(k)}</a>`).join('')}</div></div>
       ${col('Sections',[['#categories','Categories and professions'],['#search','Search'],['#how','How it works'],['#card','AfterWorc card'],['#about','About us']])}
       ${col('Legal',[['#terms','Terms and Conditions'],['#privacy','Privacy and Confidentiality Policy'],['#cookies','Cookie Notice'],['#cookiesettings','Cookie settings']])}
@@ -118,9 +118,11 @@ const cleanPerson=o=>{const c=v=>typeof v==='string'?esc(v):Array.isArray(v)?v.m
 const rateTxt=p=>p.rate?`€${p.rate} / h`:p.monthly?`€${Number(p.monthly).toLocaleString('en-GB')} / mo`:'Rate on request';
 const lvPill=p=>p.lv==='checked'?seal('Worc-Checked'):`<span class="seal" style="color:var(--blue)">${ic('shield',14)}Verified</span>`;
 const initials=n=>n.split(' ').map(w=>w[0]).join('').slice(0,2);
+/* Profile photo when the specialist uploaded one, initials otherwise. */
+const avatarOf=(p,cls='')=>p.avatar?`<span class="avatar ${cls}" style="overflow:hidden"><img src="${p.avatar}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover"></span>`:`<span class="avatar ${cls} ${p.lv==='checked'?'':'alt'}">${initials(p.n)}</span>`;
 function personCard(p){
   return `<a class="card stack" href="#specialist-${p.id}" style="text-decoration:none;gap:10px">
-    <div class="row"><span class="avatar ${p.lv==='checked'?'':'alt'}">${initials(p.n)}</span><div class="grow"><b style="font-weight:600;display:block">${p.n}</b><span class="muted small">${p.r}</span></div><b class="small" style="white-space:nowrap">${rateTxt(p)}</b></div>
+    <div class="row">${avatarOf(p)}<div class="grow"><b style="font-weight:600;display:block">${p.n}</b><span class="muted small">${p.r}</span></div><b class="small" style="white-space:nowrap">${rateTxt(p)}</b></div>
     <div class="row between wrapf">${lvPill(p)}<span class="pill ${p.now?'ok':''}">${p.avail}</span></div>
     <div class="chips">${p.skills.map(k=>`<span class="chip" style="padding:3px 10px">${k}</span>`).join('')}</div>
     <div class="row between tiny muted"><span>${p.deals} deals · ★ ${p.stars}</span><span>${p.city}</span></div>
@@ -156,13 +158,13 @@ function vHome(){
   return `
   <section class="hero"><div class="wrap in solo">
     <div class="copy">
-      <span class="mono">Departments on demand</span>
-      <h1>Hire one professional or a whole <em>department.</em></h1>
-      <p class="sub">Verified specialists for one job, or a full team with one lead, one agreement and one invoice.</p>
+      <span class="mono">Workforce for SaaS, EMI, PSP and fintech</span>
+      <h1>Build your workforce. <em>We run the rest.</em></h1>
+      <p class="sub">You know the business you want to build. The hard part is the people behind it: finding them, checking them, hiring them in another country, and paying them on time.</p>
       <div class="hbox">
         <div class="htabs" role="tablist" aria-label="I want to">${[['hire','I want to hire'],['work','I want to work']].map(([k,l])=>`<button role="tab" aria-selected="${S.htab===k}" class="${S.htab===k?'on':''}" data-act="htab" data-arg="${k}">${l}</button>`).join('')}</div>
         ${S.htab==='hire'?`<form class="hsearch" data-form="hsearch" role="search" aria-label="Find specialists"><span class="ic">${ic('search',19)}</span><input id="hq" name="hq" type="search" placeholder="Skill, role or name" autocomplete="off" enterkeyhint="search"><button class="btn g" type="submit" aria-label="Search">${ic('search',17)}<span class="bl" data-notr>${{en:'Search',et:'Otsi',ru:'Найти'}[S.lang]}</span></button></form>
-        <div class="hpop"><a class="chip team" href="#hiring">A whole team ${ic('arrow',13)}</a>${[['Backend developer','backend'],['UI/UX designer','designer'],['DevOps engineer','devops'],['Marketing lead','marketing']].map(([l,q])=>`<button class="chip" data-act="hq" data-arg="${q}">${l}</button>`).join('')}</div>`
+        <div class="hpop"><a class="chip team" href="#hiring">A whole team ${ic('arrow',13)}</a>${[['Payments operations','payments'],['AML / KYC analyst','aml'],['Backend developer','backend'],['DevOps engineer','devops']].map(([l,q])=>`<button class="chip" data-act="hq" data-arg="${q}">${l}</button>`).join('')}</div>`
         :`<form class="hsearch" data-form="hwork" aria-label="Join as a specialist"><span class="ic">${ic('user',19)}</span><input name="hw" placeholder="Your profession, e.g. DevOps" autocomplete="off"><button class="btn g" type="submit">${ic('arrow',17)}<span class="bl" data-notr>${{en:'Join',et:'Liitu',ru:'Вступить'}[S.lang]}</span></button></form>
         <div class="hpop hnote"><span class="muted">Free to join. Clients see what was checked.</span><a class="chip team" href="#building">How it works ${ic('arrow',13)}</a></div>`}
       </div>
@@ -170,10 +172,16 @@ function vHome(){
     </div>
   </div></section>
 
+  ${sec(`${shead('What we run for you','The hard part is the people. We take it off your desk.','You decide what to build and who leads it. We do the four jobs that slow every growing company down.')}
+    <div class="grid g4 g4m2">${[['search','Finding them','A person reads your brief and sends up to 3 matches within 48 hours. No job boards, no pile of CVs.'],['shield','Checking them','Identity, a skills test, two references and a live interview, before you ever meet them.'],['globe','Hiring them abroad','We are the employer of record in their country: contract, payroll, taxes and benefits.'],['money','Paying them on time','Milestones held until you accept, salaries paid every month, one invoice for all of it.']].map(([i,t,s])=>`<div class="card"><span class="icbox">${ic(i,18)}</span><h3 style="margin-top:12px">${t}</h3><p class="muted small">${s}</p></div>`).join('')}</div>`,'alt')}
+
   ${sec(`${shead('Our services','Choose the capacity you need.')}
-    <div class="opts" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
-      ${[['task','A task','One specialist, one job, fixed price.','task'],['user','A specialist','Senior capacity added to your team.','person'],['team','A ready team','Pre-assembled, with a lead, ready to execute.','team'],['dept','A department','A whole function around your roadmap.','dept']].map(([i,t,s,k],n)=>`<a class="opt ${n===3?'on':''}" href="#hiring-assess" data-type="${k}"><span class="ic">${ic(i,17)}</span><b>${t}</b><span>${s}</span></a>`).join('')}
-    </div>`,'alt')}
+    <div class="opts" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+      ${[['task','A task','One specialist, one job, fixed price.','task'],['user','A specialist','Senior capacity added to your team.','person'],['team','A ready team','Pre-assembled, with a lead, ready to execute.','team'],['dept','A department','A whole function around your roadmap.','dept'],['globe','Hire abroad (EOR)','We employ them in their country. You direct the work.','eor']].map(([i,t,s,k],n)=>`<a class="opt ${n===3?'on':''}" href="#hiring-assess" data-type="${k}"><span class="ic">${ic(i,17)}</span><b>${t}</b><span>${s}</span></a>`).join('')}
+    </div>`)}
+
+  ${sec(`${shead('Who we build for','Teams for companies that move money.','SaaS, EMI, PSP and fintech teams need people who understand regulated products. That is where we specialise.')}
+    <div class="grid g4 g4m2">${[['code','SaaS','Product engineering, DevOps and QA for B2B platforms, as one accountable team.'],['bank','EMI','Payment operations, safeguarding, AML and KYC analysts for e-money institutions.'],['card','PSP','Integration engineers, acquiring specialists and chargeback teams for payment providers.'],['spark','Fintech','Engineers and compliance people who have shipped regulated products before.']].map(([i,t,s])=>`<div class="card"><span class="icbox">${ic(i,18)}</span><h3 style="margin-top:12px">${t}</h3><p class="muted small">${s}</p></div>`).join('')}</div>`,'alt')}
 
   ${sec(`${shead('Checked specialists','Available this week.','A few of the people clients can hire today. Every profile states what was checked.',`<a class="btn ghost" href="#search">Find specialists ${ic('arrow',15)}</a>`)}
     <div class="grid g4 hs">${PEOPLE.filter(p=>p.lv==='checked').slice(0,4).map(personCard).join('')}</div>`)}
@@ -184,7 +192,7 @@ function vHome(){
       <div class="card pad-l" id="deptpanel">
         <div class="row between wrapf"><div class="row"><span class="icbox">${ic(d.ic,18)}</span><div><h3>${d.n} department</h3><span class="muted small">${d.size}</span></div></div></div>
         <div class="grid g2" style="margin-top:20px;gap:24px">
-          <div><span class="mono" style="color:var(--muted)">Who you get</span><div class="list" style="margin-top:10px">${d.roles.map((r,i)=>`<div class="li" style="padding:10px 14px"><span class="avatar sm ${i?'alt':''}">${r.split(' ').map(w=>w[0]).join('').slice(0,2)}</span><span class="t" style="font-weight:${i?500:600}">${r}</span>${i?'':'<span class="r"><span class="pill ok">Lead</span></span>'}</div>`).join('')}</div></div>
+          <div><span class="mono" style="color:var(--muted)">Who you get</span><div class="list" style="margin-top:10px">${d.roles.map((r,i)=>`<div class="li" style="padding:10px 14px"><span class="avatar sm ${i?'alt':''}">${r.split(/\s+/).filter(w=>/^\p{L}/u.test(w)).map(w=>w[0].toUpperCase()).join('').slice(0,2)}</span><span class="t" style="font-weight:${i?500:600}">${r}</span>${i?'':'<span class="r"><span class="pill ok">Lead</span></span>'}</div>`).join('')}</div></div>
           <div><span class="mono" style="color:var(--muted)">Takes off your desk</span><div class="checks" style="margin-top:12px">${d.tasks.map(t=>`<div class="row">${ck()}<span>${t}</span></div>`).join('')}</div></div>
         </div>
         <div class="costbar"><div><span class="mono" style="color:var(--brand2);font-size:11px">Team cost estimate</span><b>What would this team cost you?</b><span>Tell us your scope and we’ll come back with a price.</span></div><a class="btn g lg" href="#hiring-assess" data-type="dept">Estimate team cost ${ic('arrow',16)}</a></div>
@@ -192,13 +200,24 @@ function vHome(){
     </div>
     ${note('Live stacks four long department cards. Here it’s the account’s list-and-detail pattern: pick a department on the left, see the team on the right.')}`)}
 
+  ${sec(`<div class="split at">
+      <div class="stack" style="gap:16px"><span class="mono">Employer of Record (EOR)</span><h2>Hire in another country without opening a company there.</h2>
+        <p class="muted" style="font-size:16px">Found the right person in Lisbon, Warsaw or Kyiv? We become their legal employer in their country, so you can hire them in weeks, not months, and stay compliant.</p>
+        ${checks([['A local employment contract','Written under the law of their country, in their language.'],['Payroll, taxes and social security','Calculated, withheld and paid every month.'],['Benefits and onboarding','Holidays, sick leave and equipment handled for you.'],['Paid on time, every month','Salaries go out on the agreed day. You get one invoice.']])}
+        <a class="btn g" href="#hiring-assess" data-type="eor" style="justify-self:start">Ask about hiring abroad ${ic('arrow',15)}</a></div>
+      <div class="card pad-l lift stack" style="gap:14px"><span class="mono" style="color:var(--muted)">Example · EOR</span><h3>Payments operations specialist, Portugal</h3>
+        <div class="feeline"><span>Gross salary</span><span>€3,800 / mo</span><span>Employer costs</span><span>paid through us</span><span>AfterWorc EOR fee</span><span>fixed, quoted up front</span><span class="tot">You receive</span><span class="tot">one monthly invoice</span></div>
+        <div class="track">${['Offer','Contract','Onboarding','First salary'].map((t,i)=>`<div class="tp ${i<2?'done':i===2?'cur':''}">${t}</div>`).join('')}</div>
+        <p class="muted small">You direct the work. We handle the employment, and the person is paid on time.</p></div>
+    </div>`,'alt')}
+
   ${sec(cardFeature('home')+note('New feature. It serves both sides, so it sits right after Departments, before the Checked standard.'))}
 
   ${sec(`${shead('The AfterWorc standard','“Checked” is a standard, not a claim.','Every professional passes four checks by people before you meet them.')}
     <div class="grid g4 g4m2">${[['user','Identity','Document and background check'],['star','Skills','Practical test in their field'],['phone','References','Past clients, actually called'],['chat','Interview','Live, with a person']].map(([i,t,s])=>`<div class="card"><span class="icbox">${ic('check',17,2.4)}</span><h3 style="margin-top:12px">${t}</h3><p class="muted small">${s}</p></div>`).join('')}</div>
     ${note('Cleaner home: no example figures, no repeated promises. Each section answers one question a client has before hiring.')}`,'alt')}
 
-  ${sec(`<div class="next"><div style="position:relative;z-index:1"><span class="mono">One department. One agreement. One invoice.</span><h3 style="font-size:22px;margin-top:6px">Start hiring or start working today.</h3><p style="margin-top:4px">Not sure what you need? Ask for a free technical assessment instead.</p></div><div class="btns" style="position:relative;z-index:1"><a class="btn" href="#register">Sign up free</a><a class="btn ghost" href="#hiring-assess">Free assessment</a></div></div>`)}`;
+  ${sec(`<div class="next"><div style="position:relative;z-index:1"><span class="mono">Build your workforce. We run the rest.</span><h3 style="font-size:22px;margin-top:6px">Start hiring or start working today.</h3><p style="margin-top:4px">Not sure what you need? Ask for a free technical assessment instead.</p></div><div class="btns" style="position:relative;z-index:1"><a class="btn" href="#register">Sign up free</a><a class="btn ghost" href="#hiring-assess">Free assessment</a></div></div>`)}`;
 }
 
 /* ================= HIRING ================= */
@@ -210,7 +229,7 @@ function hireForm(){
     ${f.devCode?`<p class="tiny muted" data-notr>Dev mode (no e-mail server): code ${esc(f.devCode)}</p>`:''}
     <div class="row between" style="margin-top:18px"><button type="button" class="btn ghost" data-act="hcodeback">Back</button><button class="btn g" type="submit" ${S.busy?'disabled':''}>Confirm and send ${ic('arrow',15)}</button></div></form>`;
   if(f.done)return `<div class="card pad-l"><div class="fdone">${ck()}<h3>Request received</h3><p class="muted small">A person reads it and replies in writing within 48 hours.<br><b data-notr>${esc(f.email||'')}</b></p><button class="btn ghost sm" data-act="hreset">Send another</button></div></div>`;
-  const types=[['task','task','A task','One job'],['person','user','A specialist','Joins your team'],['team','team','A ready team','Lead + people'],['dept','dept','A department','Whole function']];
+  const types=[['task','task','A task','One job'],['person','user','A specialist','Joins your team'],['team','team','A ready team','Lead + people'],['dept','dept','A department','Whole function'],['eor','globe','Hire abroad','Employer of Record']];
   const labels=['What you need','How to reach you'];
   return `<form class="card pad-l lift" data-form="hire" novalidate>
     <div class="wizbar" style="margin-bottom:20px">${labels.map((l,i)=>`<div class="${i===f.step?'cur':''}"><i class="${i<=f.step?'on':''}"></i><span>${i+1}. ${l}</span></div>`).join('')}</div>
@@ -228,7 +247,7 @@ function vHiring(){
     <div class="copy">
       <span class="mono">For clients · I’m hiring</span>
       <h1>You’re short of certainty, not candidates.</h1>
-      <p class="sub">Checked people, an agreement that fixes scope, deadline and amount before work starts, and money held until you accept the result.</p>
+      <p class="sub">You know the business you want to build. We find the people, check them, hire them in their own country if needed, and pay them on time. Scope, deadline and amount are fixed before work starts, and money is held until you accept the result.</p>
       <div class="btns"><a class="btn g lg" href="#register-hire">Post a brief</a><a class="btn ghost lg" href="#search">Find specialists</a></div>
       <div class="trust"><span>${ic('lock',15)}Funds held until acceptance</span><span>${ic('shield',15)}Levels assigned by people</span><span>${ic('globe',15)}Data stays in the EU</span></div>
     </div>
@@ -431,7 +450,7 @@ function vAbout(){
     <div class="copy">
       <span class="mono">About us</span>
       <h1>A marketplace that can be checked itself.</h1>
-      <p class="sub">AfterWorc is a marketplace for IT work. A profile states what has been checked about the person behind it, an agreement fixes scope, deadline and amount before the work starts, and funds stay held until the client accepts the result.</p>
+      <p class="sub">AfterWorc builds workforces for SaaS, EMI, PSP and fintech companies: we find people, check them, hire them in another country when needed and pay them on time. A profile states what has been checked about the person behind it, an agreement fixes scope, deadline and amount before the work starts, and funds stay held until the client accepts the result.</p>
       <div class="btns"><a class="btn g lg" href="#hiring">For clients</a><a class="btn ghost lg" href="#building">For specialists</a></div>
       <div class="banner">${ic('check',15,2.4)}<span>Registration is open to businesses and specialists. <a href="#register">Create a free account</a></span></div>
       <div class="trust"><span>${ic('globe',15)}Estonian company, Tallinn</span><span>${ic('shield',15)}Checks made by people</span><span>${ic('lock',15)}Data stays in the EU</span></div>
@@ -580,11 +599,12 @@ function vSpecialist(id){
     <div class="small muted" style="margin-bottom:14px"><a href="#search" class="btn link small">${ic('arrow',13)} Find specialists</a></div>
     <div class="split r at">
       <div class="stack" style="gap:16px">
-        <div class="card pad-l"><div class="row" style="gap:16px"><span class="avatar lg ${p.lv==='checked'?'':'alt'}">${initials(p.n)}</span><div class="grow"><h1 style="font-size:30px" data-notr>${p.n}</h1><div class="muted">${p.r}</div><div class="row wrapf" style="margin-top:8px">${lvPill(p)}<span class="pill ${p.now?'ok':''}">${p.avail}</span></div></div></div>
+        <div class="card pad-l"><div class="row" style="gap:16px">${avatarOf(p,'lg')}<div class="grow"><h1 style="font-size:30px" data-notr>${p.n}</h1><div class="muted">${p.r}</div><div class="row wrapf" style="margin-top:8px">${lvPill(p)}<span class="pill ${p.now?'ok':''}">${p.avail}</span></div></div></div>
           <div class="chips" style="margin-top:16px">${p.skills.map(k=>`<span class="chip">${k}</span>`).join('')}</div></div>
         <div class="card"><h3>What was checked</h3><div class="ladder" style="margin-top:6px">${[['Identity','Confirmed against a document',1],['References','2 of 2 called',p.lv==='checked'],['Interview','Live, with our team',p.lv==='checked']].map(([t,d,ok])=>`<div class="lad ${ok?'done':''}"><span class="b">${ok?ic('check',14,2.6):'–'}</span><div><b>${t}</b><p>${ok?d:'Not yet'}</p></div><span></span></div>`).join('')}</div></div>
         ${p.history&&p.history.length?`<div class="card"><h3>Recent work</h3><div class="list" style="margin-top:12px">${p.history.slice(0,3).map(w=>`<div class="li"><span class="icbox" style="width:30px;height:30px">${ic('check',14,2.4)}</span><span class="grow"><div class="t" data-notr>${w.t}</div><div class="s">Delivered · ★ ${p.stars}</div></span><b class="small">€${Number(w.a).toLocaleString('en-GB')}</b></div>`).join('')}</div></div>`:''}
         ${p.bio?`<div class="card"><h3>About</h3><p class="muted" style="margin-top:6px" data-notr>${p.bio}</p></div>`:''}
+        ${p.portfolio&&p.portfolio.length?`<div class="card"><h3>Portfolio</h3><div class="grid g3" style="margin-top:12px">${p.portfolio.map(w=>`<div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid">${w.image?`<a href="${w.image}" target="_blank" rel="noopener"><img src="${w.image}" alt="" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block"></a>`:''}<div style="padding:10px 12px" data-notr><b class="small">${w.title}</b>${w.descr?`<p class="tiny muted" style="margin-top:4px">${w.descr}</p>`:''}${w.url&&/^https?:\/\//.test(w.url)?`<a class="tiny" href="${w.url}" target="_blank" rel="noopener noreferrer nofollow">${w.url.replace(/^https?:\/\//,'').slice(0,40)}</a>`:''}</div></div>`).join('')}</div></div>`:''}
       </div>
       <div class="card pad-l lift stack" style="position:sticky;top:84px">
         <div class="row between"><span class="muted">Rate</span><b style="font-family:Sora;font-size:24px">${rateTxt(p)}</b></div>
@@ -634,7 +654,7 @@ function route(){
   if(!PAGES[pg])pg='home';
   if((pg==='register'||pg==='login')&&S.me&&!S.loginFor){location.href='/app';return}
   const changed=S.page!==pg||pg==='specialist'||pg==='register';S.page=pg;S.menu=false;
-  document.title=({home:'AfterWorc · Checked specialists and departments on demand',hiring:'Hire checked specialists · AfterWorc',building:'For specialists · AfterWorc',how:'How it works · AfterWorc',card:'AfterWorc card',categories:'Categories · AfterWorc',about:'About us · AfterWorc',register:'Sign up · AfterWorc',login:'Log in · AfterWorc',search:'Find specialists · AfterWorc',terms:'Terms and Conditions · AfterWorc',privacy:'Privacy Policy · AfterWorc',cookies:'Cookie Notice · AfterWorc'})[pg]||'AfterWorc';
+  document.title=({home:'AfterWorc · Build your workforce. We run the rest.',hiring:'Hire checked specialists · AfterWorc',building:'For specialists · AfterWorc',how:'How it works · AfterWorc',card:'AfterWorc card',categories:'Categories · AfterWorc',about:'About us · AfterWorc',register:'Sign up · AfterWorc',login:'Log in · AfterWorc',search:'Find specialists · AfterWorc',terms:'Terms and Conditions · AfterWorc',privacy:'Privacy Policy · AfterWorc',cookies:'Cookie Notice · AfterWorc'})[pg]||'AfterWorc';
   render(anchor);
   if(!anchor&&changed)window.scrollTo({top:0,behavior:'instant'});
 }

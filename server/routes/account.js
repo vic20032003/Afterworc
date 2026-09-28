@@ -675,7 +675,15 @@ ACT.email_change = (u, b) => {
 };
 ACT.email_cancel = u => { const p = j(u.prefs, {}); delete p.pendingEmail; run('UPDATE users SET prefs=? WHERE id=?', JSON.stringify(p), u.id); run("DELETE FROM tokens WHERE user_id=? AND kind='email' AND used_at IS NULL", u.id); return { toast: 'E-mail change cancelled' }; };
 /* --- avatar + portfolio --- */
-function ownImage(u, id) { const f = one('SELECT * FROM files WHERE id=? AND user_id=?', int(id, { min: 1, name: 'image' }), u.id); if (!f || !/^image\//.test(f.mime)) throw bad('Upload the image first'); return f; }
+/* Only files that really are PNG, JPEG, GIF or WebP (checked by their bytes) can become public images. */
+function ownImage(u, id) {
+  const f = one('SELECT * FROM files WHERE id=? AND user_id=?', int(id, { min: 1, name: 'image' }), u.id);
+  if (!f || !/^image\//.test(f.mime)) throw bad('Upload the image first');
+  let kind = null; try { kind = imageKind(path.join(DATA_DIR, 'uploads', path.basename(f.path))); } catch { /* missing file */ }
+  if (!kind) throw bad('That file is not a valid image.');
+  if (kind !== f.mime) run('UPDATE files SET mime=? WHERE id=?', kind, f.id);
+  return f;
+}
 ACT.avatar_set = (u, b) => { const f = ownImage(u, b.fileId); run('UPDATE users SET avatar_file_id=? WHERE id=?', f.id, u.id); return { toast: 'Photo updated' }; };
 ACT.avatar_remove = u => { run('UPDATE users SET avatar_file_id=NULL WHERE id=?', u.id); return { toast: 'Photo removed' }; };
 function portfolioFields(b) {
