@@ -1,0 +1,27 @@
+{
+  "name": "afterworc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AfterWorc: checked specialists, teams and departments on demand. Public site, account and staff console.",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "dev": "node --env-file-if-exists=.env --watch server/index.js",
+    "test": "node --test test/*.test.js",
+    "test:browser": "node test/browser.e2e.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^4.22.3",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.12",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}
