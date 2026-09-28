@@ -1,4 +1,5 @@
 /* Account state: server data, hash routing (#/hire/deal/12), actions, modals, toasts, language and live updates. */
+import { link } from '../shared/links.js';
 import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { api } from '../shared/api.js';
 import { socket } from '../shared/socket.js';
@@ -60,7 +61,7 @@ export function Provider({ children }) {
     busyRef.current = true; if (!quiet) setBusy(true);
     try {
       const r = await api('/account/action', { mode: modeRef.current, ...payload, type });
-      if (r.logout) { location.href = '/'; return r; }
+      if (r.logout) { location.href = link('/'); return r; }
       if (r.redirect) { location.href = r.redirect; return r; }
       if (r.state) setData(r.state);
       if (!keepModal) setModal(null);

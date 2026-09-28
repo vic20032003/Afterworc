@@ -32,6 +32,22 @@ function ringer() {
   return { start() { beep(); timer = setInterval(beep, 2200); }, stop() { clearInterval(timer); timer = null; try { ctx && ctx.close(); } catch { /* closed */ } ctx = null; } };
 }
 
+/* Clickable demo (no server, no camera, no WebRTC): a generated picture and silent audio stand in for the media. */
+const DEMO = () => !!window.__AW_DEMO;
+function fakeStream(label, video) {
+  const stream = new MediaStream();
+  try { const ac = new (window.AudioContext || window.webkitAudioContext)(); stream.addTrack(ac.createMediaStreamDestination().stream.getAudioTracks()[0]); } catch { /* no audio */ }
+  if (video) {
+    const c = document.createElement('canvas'); c.width = 640; c.height = 360; const g = c.getContext('2d'); const t0 = Date.now();
+    const draw = () => { const t = (Date.now() - t0) / 1000; const grd = g.createLinearGradient(0, 0, 640, 360); grd.addColorStop(0, '#065132'); grd.addColorStop(1, `hsl(${140 + 20 * Math.sin(t)},45%,${22 + 6 * Math.sin(t / 2)}%)`);
+      g.fillStyle = grd; g.fillRect(0, 0, 640, 360); g.fillStyle = 'rgba(255,255,255,.9)'; g.font = '600 34px Inter, sans-serif'; g.textAlign = 'center'; g.fillText(label, 320, 190); g.font = '16px Inter, sans-serif'; g.fillText('demo video', 320, 222);
+      if (stream.active) requestAnimationFrame(draw); };
+    draw();
+    if (c.captureStream) c.captureStream(20).getVideoTracks().forEach(tr => stream.addTrack(tr));
+  }
+  return stream;
+}
+
 const Avatar = ({ who, cls = '' }) => <span className={'avatar ' + cls}>{who && who.avatar ? <img src={who.avatar} alt="" /> : (who && who.initials) || '•'}</span>;
 
 export function CallProvider({ children, toast }) {
@@ -49,11 +65,13 @@ export function CallProvider({ children, toast }) {
     try { pc.current && pc.current.close(); } catch { /* closed */ }
     pc.current = null; pendingIce.current = [];
     if (local.current) local.current.getTracks().forEach(tr => tr.stop());
+    if (remoteStream.current) remoteStream.current.getTracks().forEach(tr => tr.stop());
     local.current = null; remoteStream.current = null;
     setCall(null); setMuted(false); setCamOff(false); setMinimized(false);
   }, []);
 
   const getMedia = async kind => {
+    if (DEMO()) return fakeStream('You', kind === 'video');
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error(t('Calls need a secure (https) connection and a browser with camera and microphone support.'));
     try { return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: kind === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false }); }
     catch (e) {
@@ -125,6 +143,11 @@ export function CallProvider({ children, toast }) {
     if (m.t === 'call:error') { toast && toast(t(m.error), true); cleanup(); return; }
     if (!c || m.callId !== c.id) return;
     if (m.t === 'call:taken' && c.dir === 'in' && c.state === 'ringing') { cleanup(); return; }
+    if (m.t === 'call:accepted' && c.dir === 'out' && DEMO()) {
+      remoteStream.current = fakeStream((c.peer && c.peer.name) || 'AfterWorc', c.kind === 'video');
+      setCall({ ...c, state: 'active', startedAt: Date.now() });
+      return;
+    }
     if (m.t === 'call:accepted' && c.dir === 'out') {
       setCall({ ...c, state: 'connecting' });
       const p = await makePc(c.id);

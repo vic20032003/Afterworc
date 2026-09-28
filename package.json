@@ -14,7 +14,8 @@
     "start": "node scripts/ensure-build.js && node --env-file-if-exists=.env server/index.js",
     "dev": "node --env-file-if-exists=.env --watch server/index.js",
     "test": "node --test test/*.test.js",
-    "test:browser": "node scripts/ensure-build.js && node test/browser.e2e.js"
+    "test:browser": "node scripts/ensure-build.js && node test/browser.e2e.js",
+    "build:demo": "node scripts/build-demo.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

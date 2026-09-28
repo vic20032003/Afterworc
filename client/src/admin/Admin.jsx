@@ -1,4 +1,5 @@
 /* AfterWorc staff console: inbox (with calls), briefs, requests, specialists, users (verification level, status, checks), skills moderation, deals, money, e-mails. */
+import { link } from '../shared/links.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../shared/api.js';
 import { socket } from '../shared/socket.js';
@@ -262,8 +263,8 @@ function Console({ store }) {
   };
   const body = { inbox: <Inbox o={o} act={act} sel={sel} setSel={setSel} />, briefs: o.briefs.length ? <div className="stack">{o.briefs.map(b => <BriefCard key={b.id + b.status} b={b} o={o} act={act} />)}</div> : <Empty>No briefs yet.</Empty>, leads: <Leads o={o} act={act} />, specs: <Specs o={o} act={act} />, users: <Users o={o} act={act} />, skills: <Skills o={o} act={act} />, deals: <Deals o={o} act={act} />, money: <Money o={o} act={act} />, mail: <Mail o={o} /> }[tab];
   return <>
-    <header className="top"><div className="in"><a className="logo" href="/" style={{ textDecoration: 'none', color: 'inherit' }}><span className="mk"><LogoMark /></span><span className="wm">afterwor<i>c</i></span></a><Pill c="info">Staff console</Pill><div className="spacer" />
-      {!o.smtp && <Pill c="wait">No SMTP: e-mails are logged only</Pill>}<span className="small muted hide-m">{o.me.email}</span><a className="btn ghost sm" href="/app">My account</a><button className="btn ghost sm" onClick={() => load().then(() => store.toast('Refreshed'))}>Refresh</button></div></header>
+    <header className="top"><div className="in"><a className="logo" href={link('/')} style={{ textDecoration: 'none', color: 'inherit' }}><span className="mk"><LogoMark /></span><span className="wm">afterwor<i>c</i></span></a><Pill c="info">Staff console</Pill><div className="spacer" />
+      {!o.smtp && <Pill c="wait">No SMTP: e-mails are logged only</Pill>}<span className="small muted hide-m">{o.me.email}</span><a className="btn ghost sm" href={link('/app')}>My account</a><button className="btn ghost sm" onClick={() => load().then(() => store.toast('Refreshed'))}>Refresh</button></div></header>
     <div style={{ maxWidth: 1360, margin: '0 auto', padding: 18 }}>
       <div className="tabsx">{TABS.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => { setTab(k); setSel(null); }}>{l}{c[k] > 0 && <span className="c" style={{ background: 'var(--amber)', color: '#fff' }}>{c[k]}</span>}</button>)}</div>
       {body}

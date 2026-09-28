@@ -1,3 +1,4 @@
+import { link } from '../../shared/links.js';
 import { useState } from 'react';
 import { useApp } from '../store.jsx';
 import { Ic } from '../../shared/icons.jsx';
@@ -46,7 +47,7 @@ function Privacy() {
   const { data, setModal } = useApp();
   return (<>
     <div className="card"><h3>{t('Documents you accepted')}</h3><div className="kv" style={{ marginTop: 10 }}><span>{t('Terms and Conditions')}</span><span>{data.me.termsAt ? t('Accepted {when}', { when: tr(data.me.termsAt) }) : '—'}</span><span>{t('Privacy Policy')}</span><span>{data.me.termsAt ? t('Accepted {when}', { when: tr(data.me.termsAt) }) : '—'}</span></div>
-      <p className="muted tiny" style={{ marginTop: 8 }}><a href="/#terms" target="_blank" rel="noopener">{t('Read the Terms')}</a> · <a href="/#privacy" target="_blank" rel="noopener">{t('Privacy Policy')}</a>. {t("When a document changes, you'll see a banner to accept the new version.")}</p></div>
+      <p className="muted tiny" style={{ marginTop: 8 }}><a href={link('/#terms')} target="_blank" rel="noopener">{t('Read the Terms')}</a> · <a href={link('/#privacy')} target="_blank" rel="noopener">{t('Privacy Policy')}</a>. {t("When a document changes, you'll see a banner to accept the new version.")}</p></div>
     <div className="card"><h3>{t('Your data')}</h3><p className="muted small" style={{ margin: '4px 0 10px' }}>{t('Stored in the EU. Download a copy any time (JSON).')}</p><a className="btn ghost sm" href="/api/account/export" download><Ic n="dl" s={14} />{t('Download my data')}</a></div>
     <div className="card"><h3>{t('Leave AfterWorc')}</h3><p className="muted small" style={{ margin: '4px 0 10px' }}><b>{t('Close')}</b> {t('keeps records we must keep by law (invoices, deals) and ends your access.')} <b>{t('Delete')}</b> {t('also erases everything else. Open deals must be finished and balances empty first.')}</p><button className="btn danger sm" onClick={() => setModal({ k: 'leave' })}>{t('Close or delete account…')}</button></div>
   </>);

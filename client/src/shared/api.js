@@ -1,4 +1,5 @@
 /* JSON API client shared by the account and the staff console. */
+import { link } from './links.js';
 export class ApiError extends Error { constructor(msg, data, status) { super(msg); this.data = data || {}; this.status = status; } }
 
 export async function api(path, body, { method } = {}) {
@@ -7,7 +8,7 @@ export async function api(path, body, { method } = {}) {
     headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'afterworc' },
     credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined
   });
-  if (r.status === 401) { location.href = '/#login'; throw new ApiError('Log in to continue', {}, 401); }
+  if (r.status === 401) { location.href = link('/#login'); throw new ApiError('Log in to continue', {}, 401); }
   let d = {}; try { d = await r.json(); } catch { /* not JSON */ }
   if (!r.ok) throw new ApiError(d.error || 'Something went wrong. Try again.', d, r.status);
   return d;

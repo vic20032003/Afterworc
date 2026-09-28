@@ -1,4 +1,5 @@
 /* Account shell: top bar, side and bottom navigation, the current view, modals, toasts and calls. */
+import { link } from '../shared/links.js';
 import { useEffect, useRef, useState } from 'react';
 import { useApp, counts, hasCard } from './store.jsx';
 import { Ic, LogoMark, SealIc } from '../shared/icons.jsx';
@@ -92,8 +93,8 @@ function AvatarMenu() {
       <button className="mi" onClick={() => go('profile')}><Ic n="user" s={16} />{t('Profile, photo & portfolio')}</button>
       <button className="mi" onClick={() => go('settings', 'sec')}><Ic n="gear" s={16} />{t('Settings')}</button>
       <button className="mi" onClick={() => go('help')}><Ic n="help" s={16} />{t('Help & support')}</button>
-      {data.me.admin && <a className="mi" href="/admin" style={{ textDecoration: 'none', color: 'inherit' }}><Ic n="shield" s={16} />{t('Staff console')}</a>}
-      <a className="mi" href="/" style={{ textDecoration: 'none', color: 'inherit' }}><Ic n="globe" s={16} />afterworc.com</a>
+      {data.me.admin && <a className="mi" href={link('/admin')} style={{ textDecoration: 'none', color: 'inherit' }}><Ic n="shield" s={16} />{t('Staff console')}</a>}
+      <a className="mi" href={link('/')} style={{ textDecoration: 'none', color: 'inherit' }}><Ic n="globe" s={16} />afterworc.com</a>
       <hr />
       {/* Appearance: theme and language together */}
       <div className="rowlabel"><Ic n="moon" s={14} />{t('Theme')}</div>
@@ -106,7 +107,7 @@ function AvatarMenu() {
         {LANGS.map(([k, l, n]) => <button key={k} className={lang === k ? 'on' : ''} lang={k} title={n} onClick={() => changeLang(k)}>{n}</button>)}
       </div>
       <hr />
-      <button className="mi" onClick={async () => { try { await api('/auth/logout', {}); } catch { /* ignore */ } location.href = '/'; }}><Ic n="out" s={16} />{t('Sign out')}</button>
+      <button className="mi" onClick={async () => { try { await api('/auth/logout', {}); } catch { /* ignore */ } location.href = link('/'); }}><Ic n="out" s={16} />{t('Sign out')}</button>
     </div>
   );
 }
