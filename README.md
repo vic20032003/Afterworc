@@ -104,6 +104,7 @@ server/
   seed.js         directory, staff and demo accounts
   routes/         auth, public, account (all account actions), admin
 public/
+  fonts/          self-hosted Sora, Inter, IBM Plex Mono (+ licences); no Google Fonts
   index.html      public site   · assets/ (site.js, i18n, legal pages, card renderer, styles)
   app/            account       · core.js, views.js, views2.js, modals.js, app.css
   admin/          staff console

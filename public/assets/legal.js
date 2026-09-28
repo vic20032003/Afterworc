@@ -38,7 +38,7 @@ function vPrivacy(){
 function vCookies(){
   return legalPage('Legal','Cookie Notice',[
     ['What we use',['AfterWorc uses one strictly necessary cookie, aw_sid, to keep you logged in (HTTP-only, expires after 30 days of inactivity). Your theme, language and cookie choices are remembered in your browser\'s local storage.','We do not use analytics or advertising cookies. If we add them, they stay off until you allow them in Cookie settings.']],
-    ['Fonts',['Pages load fonts from Google Fonts, which receives your IP address when the font files are requested.']],
+    ['Fonts',['All fonts are served from afterworc.com itself. No third party receives your IP address when you load a page.']],
     ['Your choices',['Strictly necessary cookies cannot be switched off, because the account does not work without them. You can clear them in your browser at any time; you will be logged out. <a href="#cookiesettings">Open cookie settings</a>.']]
   ]);
 }
