@@ -19,13 +19,15 @@ router.get('/overview', (req, res) => {
     me: { name: req.user.name, email: req.user.email },
     smtp: mail.hasSmtp(),
     leads: all('SELECT * FROM leads ORDER BY id DESC LIMIT 200').map(l => ({ ...l, data: j(l.data, {}), at: fmtDayTime(l.created_at), code_hash: undefined })),
-    users: all('SELECT id, email, name, role_pref, email_verified, is_admin, totp_secret IS NOT NULL twofa, verify, closed_at, created_at FROM users ORDER BY id DESC LIMIT 500').map(u => ({ ...u, verify: j(u.verify, {}), at: fmtDay(u.created_at), spec: one('SELECT id, published, level, submitted_at FROM specialists WHERE user_id=?', u.id) || null })),
+    users: all('SELECT id, email, name, role_pref, email_verified, is_admin, totp_secret IS NOT NULL twofa, verify, closed_at, created_at, level, status, status_note, verified_at, verified_by, avatar_file_id FROM users ORDER BY id DESC LIMIT 500').map(u => ({ ...u, verify: j(u.verify, {}), at: fmtDay(u.created_at), verifiedOn: u.verified_at ? fmtDay(u.verified_at) : null, avatar: D.mediaUrl(u.avatar_file_id), spec: one('SELECT id, published, level, submitted_at FROM specialists WHERE user_id=?', u.id) || null })),
+    skills: all(`SELECT s.*, u.email FROM skills s LEFT JOIN users u ON u.id=s.created_by ORDER BY s.status='pending' DESC, s.name COLLATE NOCASE`).map(k => ({ id: k.id, name: k.name, status: k.status, by: k.email, at: fmtDay(k.created_at), uses: skillUses(k.name) })),
     briefs: all('SELECT b.*, u.email FROM briefs b JOIN users u ON u.id=b.user_id WHERE b.status!=\'draft\' ORDER BY b.sent_at DESC LIMIT 300').map(b => ({ ...D.briefView(b), email: b.email, userId: b.user_id, sentAt: b.sent_at, overdue: ['review', 'matching'].includes(b.status) && b.sent_at < now() - 48 * HOUR })),
     specialists: all('SELECT * FROM specialists ORDER BY published DESC, name').map(s => ({ ...D.specView(s), email: s.user_id ? (one('SELECT email FROM users WHERE id=?', s.user_id) || {}).email : null, profile: j(s.profile, {}), submitted: !!s.submitted_at })),
     deals: all('SELECT * FROM deals ORDER BY id DESC LIMIT 300').map(d => ({ ...D.dealView(d, 'hire', d.client_user_id), linked: !!(D.specById(d.specialist_id) || {}).user_id, specName: (D.specById(d.specialist_id) || {}).name })),
-    threads: all('SELECT t.*, u.email, u.name owner FROM threads t JOIN users u ON u.id=t.user_id ORDER BY t.staff_unread>0 DESC, t.updated_at DESC LIMIT 200').map(t => ({
+    threads: all('SELECT t.*, u.email, u.name owner FROM threads t JOIN users u ON u.id=t.user_id WHERE EXISTS (SELECT 1 FROM messages m WHERE m.thread_id=t.id) ORDER BY t.staff_unread>0 DESC, t.updated_at DESC LIMIT 200').map(t => ({
       id: t.id, kind: t.kind, mode: t.mode, title: t.title, owner: t.owner, email: t.email, sub: t.sub, unread: t.staff_unread, linked: !!t.peer_user_id, at: fmtAgo(t.updated_at),
-      msgs: all('SELECT sender, sender_name, body, created_at FROM messages WHERE thread_id=? ORDER BY id', t.id).map(m => ({ f: m.sender, who: m.sender_name, t: m.body, tm: fmtAgo(m.created_at) }))
+      userId: t.user_id, peerUserId: t.peer_user_id,
+      msgs: all('SELECT sender, sender_name, body, created_at, edited_at FROM messages WHERE thread_id=? ORDER BY id', t.id).map(m => ({ f: m.sender, who: m.sender_name, t: m.body, tm: fmtAgo(m.created_at), edited: !!m.edited_at }))
     })),
     issues: all('SELECT i.*, d.title, u.email FROM issues i JOIN deals d ON d.id=i.deal_id LEFT JOIN users u ON u.id=i.user_id ORDER BY i.status=\'open\' DESC, i.id DESC').map(i => ({ ...i, at: fmtDayTime(i.created_at) })),
     sepa: all("SELECT t.*, u.email FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.status='Pending' ORDER BY t.id").map(t => ({ ...t, at: fmtDay(t.created_at) })),
@@ -36,7 +38,79 @@ router.get('/overview', (req, res) => {
   });
 });
 
+/* Profiles store skills by name, so counting and merging work on names. */
+function skillUses(name) { return all('SELECT skills FROM specialists').filter(r => j(r.skills, []).some(x => String(x).toLowerCase() === name.toLowerCase())).length; }
+function renameSkillEverywhere(from, to) {
+  for (const s of all('SELECT id, skills, user_id FROM specialists')) {
+    const list = j(s.skills, []); if (!list.some(x => String(x).toLowerCase() === from.toLowerCase())) continue;
+    const next = []; for (const x of list) { const v = String(x).toLowerCase() === from.toLowerCase() ? to : x; if (v && !next.some(y => y.toLowerCase() === v.toLowerCase())) next.push(v); }
+    run('UPDATE specialists SET skills=? WHERE id=?', JSON.stringify(next), s.id);
+    if (s.user_id) require('../bus').sync(s.user_id);
+  }
+}
+
 const ACT = {};
+/* --- skills moderation --- */
+const skillRow = id => { const k = one('SELECT * FROM skills WHERE id=?', int(id, { min: 1, name: 'skill' })); if (!k) throw bad('Skill not found'); return k; };
+ACT.skill_add = b => {
+  const name = str(b.name, { min: 1, max: 40, name: 'skill name' }).replace(/\s+/g, ' ');
+  const ex = one('SELECT * FROM skills WHERE name=?', name);
+  if (ex && ex.status === 'approved') throw bad('That skill already exists');
+  if (ex) run("UPDATE skills SET status='approved', approved_at=? WHERE id=?", now(), ex.id);
+  else run("INSERT INTO skills (name, status, created_at, approved_at) VALUES (?, 'approved', ?, ?)", name, now(), now());
+  D.skillsChanged();
+};
+ACT.skill_approve = b => {
+  const k = skillRow(b.id);
+  const name = b.name ? str(b.name, { min: 1, max: 40, name: 'skill name' }) : k.name;
+  if (name !== k.name) { if (one('SELECT 1 FROM skills WHERE name=? AND id!=?', name, k.id)) throw bad('A skill with that name exists: merge instead'); renameSkillEverywhere(k.name, name); }
+  run("UPDATE skills SET status='approved', name=?, approved_at=? WHERE id=?", name, now(), k.id);
+  D.skillsChanged();
+  if (k.created_by) D.notify(k.created_by, 'work', `Skill approved: ${name}`, 'It now shows on your public profile', 'profile');
+};
+ACT.skill_delete = b => {
+  const k = skillRow(b.id);
+  if (b.fromProfiles) renameSkillEverywhere(k.name, null);
+  run('DELETE FROM skills WHERE id=?', k.id);
+  D.skillsChanged();
+};
+ACT.skill_merge = b => {
+  const into = skillRow(b.intoId);
+  const from = (Array.isArray(b.ids) ? b.ids : []).slice(0, 50).map(skillRow).filter(k => k.id !== into.id);
+  if (!from.length) throw bad('Pick the duplicates to merge');
+  tx(() => {
+    for (const k of from) { renameSkillEverywhere(k.name, into.name); run('DELETE FROM skills WHERE id=?', k.id); }
+    run("UPDATE skills SET status='approved', approved_at=COALESCE(approved_at, ?) WHERE id=?", now(), into.id);
+  })();
+  D.skillsChanged();
+};
+/* --- verification level and account status, set by staff --- */
+ACT.user_level = (b, req) => {
+  const u = D.userById(int(b.userId, { min: 1 })); if (!u) throw bad('User not found');
+  const level = oneOf(b.level, D.LEVELS, 'level');
+  const v = j(u.verify, {}); const stamp = `Done ${fmtDay(now())} · by staff`;
+  const set = (k, on) => { v[k] = on ? { ...(v[k] || {}), st: 'done', sub: v[k] && v[k].st === 'done' ? v[k].sub : stamp } : { ...(v[k] || {}), st: v[k] && v[k].st === 'pending' ? 'pending' : undefined, sub: undefined }; };
+  if (level === 'registered') ['id', 'skills', 'refs', 'interview', 'checked'].forEach(k => { if (v[k] && v[k].st === 'done') set(k, false); });
+  if (level === 'verified') { set('id', true); set('checked', false); }
+  if (level === 'checked') ['id', 'skills', 'refs', 'interview', 'checked'].forEach(k => set(k, true));
+  const by = str(b.by, { max: 60 }) || req.user.name || 'AfterWorc';
+  run('UPDATE users SET verify=?, level=?, verified_at=?, verified_by=?, email_verified=1 WHERE id=?', JSON.stringify(v), level, level === 'registered' ? null : now(), level === 'registered' ? null : by, u.id);
+  const s = D.mySpecialist(u.id);
+  if (s) run('UPDATE specialists SET level=?, checked_by=?, checked_on=? WHERE id=?', level, level === 'checked' ? by : null, level === 'checked' ? new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' }).format(new Date()) : null, s.id);
+  const label = { registered: 'Registered', verified: 'Verified', checked: 'Checked in person' }[level];
+  D.notify(u.id, u.role_pref, `Your verification level: ${label}`, level === 'registered' ? 'Your checks are open again' : 'Set by the AfterWorc team', 'home');
+};
+ACT.user_status = (b, req) => {
+  const u = D.userById(int(b.userId, { min: 1 })); if (!u) throw bad('User not found');
+  if (u.id === req.user.id) throw bad('You cannot change your own status');
+  const status = oneOf(b.status, D.STATUSES, 'status');
+  const note = str(b.note, { max: 300, name: 'note' });
+  run('UPDATE users SET status=?, status_note=? WHERE id=?', status, note, u.id);
+  if (status === 'blocked') { run('DELETE FROM sessions WHERE user_id=?', u.id); require('../ws').kick(u.id); }
+  const s = D.mySpecialist(u.id); if (s && status === 'blocked') run('UPDATE specialists SET published=0 WHERE id=?', s.id);
+  if (status !== 'blocked') D.notify(u.id, u.role_pref, status === 'hold' ? 'Your account is on hold' : 'Your account is active', note || (status === 'hold' ? 'Payments and new work are paused. Message us to sort it out.' : 'Everything is available again'), 'home');
+  mail.send(u.email, `Your AfterWorc account status: ${{ active: 'active', hold: 'on hold', blocked: 'blocked' }[status]}`, `${note || 'The AfterWorc team changed the status of your account.'}\n\nQuestions? Reply to info@afterworc.com.`);
+};
 ACT.lead_status = b => { run('UPDATE leads SET status=?, staff_note=? WHERE id=?', oneOf(b.status, ['new', 'replied', 'won', 'closed', 'unconfirmed'], 'status'), str(b.note, { max: 2000 }), int(b.id, { min: 1 })); };
 ACT.brief_update = b => {
   const br = one('SELECT * FROM briefs WHERE id=?', int(b.id, { min: 1 })); if (!br) throw bad('Brief not found');
@@ -99,14 +173,15 @@ ACT.verify_set = b => {
     if (f) { try { fs.unlinkSync(path.join(DATA_DIR, 'uploads', path.basename(f.path))); } catch { /* already gone */ } run('DELETE FROM files WHERE id=?', f.id); }
     delete v.id.file;
   }
-  run('UPDATE users SET verify=? WHERE id=?', JSON.stringify(v), u.id);
-  const s = D.mySpecialist(u.id, true);
   const done = k => v[k] && v[k].st === 'done';
   const level = done('checked') ? 'checked' : done('id') ? 'verified' : 'registered';
+  run('UPDATE users SET verify=?, level=?, verified_at=CASE WHEN ?=\'registered\' THEN NULL ELSE COALESCE(verified_at, ?) END WHERE id=?', JSON.stringify(v), level, level, now(), u.id);
+  const s = D.mySpecialist(u.id, true);
   run('UPDATE specialists SET level=?, checked_by=COALESCE(?, checked_by), checked_on=COALESCE(?, checked_on) WHERE id=?', level, level === 'checked' ? (b.by || 'AfterWorc') : null, level === 'checked' ? new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' }).format(new Date()) : null, s.id);
   if (st === 'done') D.notify(u.id, 'work', `${D.VERIFY_STEPS.find(x => x[0] === key)[1]}: done`, key === 'checked' ? 'Your profile now shows "Checked in person"' : 'One step closer to the seal', 'home');
 };
 ACT.thread_reply = (b, req) => {
+  if (b.threadId && !one('SELECT 1 FROM threads WHERE id=?', +b.threadId)) throw bad('Thread not found');
   const t = one('SELECT * FROM threads WHERE id=?', int(b.threadId, { min: 1 })); if (!t) throw bad('Thread not found');
   const text = str(b.text, { min: 1, max: 4000, name: 'a reply' });
   const relay = b.as === 'relay' && t.kind === 'specialist';
@@ -157,6 +232,7 @@ router.post('/action', async (req, res) => {
   const fn = typeof b.type === 'string' && Object.hasOwn(ACT, b.type) ? ACT[b.type] : null; if (!fn) throw bad('Unknown action');
   await fn(b, req);
   audit(req, 'admin:' + b.type, JSON.stringify(b).slice(0, 400));
+  require('../bus').toStaff({ t: 'sync' });
   res.json({ ok: true });
 });
 

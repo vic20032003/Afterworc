@@ -19,6 +19,9 @@ router.use(requireUser);
 
 const mode = v => oneOf(v, ['hire', 'work'], 'mode');
 const needVerified = u => { if (!u.email_verified) throw bad('Confirm your e-mail address first. We sent you a link.'); };
+/* An account on hold can read and talk to us, but cannot move money or start new work. */
+const needActive = u => { if (u.status === 'hold') throw bad('Your account is on hold. Contact support to continue.', { onHold: true }); };
+const bus = require('../bus');
 const need2fa = (u, code) => {
   if (!u.totp_secret) throw bad('Turn on two-factor authentication first', { need2fa: true });
   if (!U.totpCheck(u.id, u.totp_secret, code)) throw bad('That code did not work. Check your authenticator app.');
@@ -55,6 +58,25 @@ router.post('/files', upload.array('files', 5), (req, res) => {
   });
   res.json({ files: out });
 });
+/* Images for the avatar and the portfolio: checked by their first bytes, not only by the declared type. */
+const imgUpload = multer({ storage: multer.diskStorage({ destination: path.join(DATA_DIR, 'uploads'), filename: (req, file, cb) => cb(null, U.randToken(16)) }),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => /^image\/(png|jpe?g|gif|webp)$/.test(file.mimetype) ? cb(null, true) : cb(bad('Use a PNG, JPG, WebP or GIF image.')) });
+function imageKind(file) {
+  const fd = fs.openSync(file, 'r'); const b = Buffer.alloc(12); fs.readSync(fd, b, 0, 12, 0); fs.closeSync(fd);
+  if (b[0] === 0x89 && b.toString('ascii', 1, 4) === 'PNG') return 'image/png';
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (b.toString('ascii', 0, 4) === 'GIF8') return 'image/gif';
+  if (b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
+router.post('/media', imgUpload.single('file'), (req, res) => {
+  const f = req.file; if (!f) throw bad('Choose an image');
+  const kind = imageKind(f.path);
+  if (!kind) { fs.unlink(f.path, () => {}); throw bad('That file is not a valid image.'); }
+  const r = run('INSERT INTO files (user_id, name, mime, size, path, created_at) VALUES (?,?,?,?,?,?)', req.user.id, String(f.originalname).slice(0, 180), kind, f.size, f.filename, now());
+  res.json({ file: { id: r.lastInsertRowid, name: f.originalname, url: '/api/account/files/' + r.lastInsertRowid } });
+});
 router.get('/files/:id', (req, res) => {
   const f = one('SELECT * FROM files WHERE id=?', +req.params.id);
   if (!f) throw new HttpError(404, 'File not found');
@@ -66,7 +88,9 @@ router.get('/files/:id', (req, res) => {
   if (!ok) throw new HttpError(404, 'File not found');
   res.setHeader('Content-Type', f.mime);
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(f.name)}"`);
+  // Own images may be previewed inline (portfolio editor); everything else downloads.
+  const inline = f.user_id === req.user.id && /^image\/(png|jpeg|gif|webp)$/.test(f.mime) && req.query.inline === '1';
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(f.name)}"`);
   fs.createReadStream(path.join(DATA_DIR, 'uploads', path.basename(f.path))).pipe(res);
 });
 
@@ -130,13 +154,56 @@ ACT.message_send = (u, b) => {
   const preview = text.length > 120 ? text.slice(0, 117) + '…' : text;
   if (mine && t.peer_user_id) D.notify(t.peer_user_id, 'work', `New message from ${t.peer_title || u.name}`, preview, 'messages', t.id, 'message');
   if (!mine) D.notify(t.user_id, t.mode, `New message from ${t.title}`, preview, 'messages', t.id, 'message');
-  if (t.kind === 'support' || (mine && !t.peer_user_id)) mail.toStaff(`Message from ${u.name} <${u.email}>`, `${t.kind === 'support' ? 'Support thread' : 'For specialist ' + t.title + ' (not linked to an account; reply in the console as them)'}:\n\n${text}`);
+  if (t.kind === 'support' || t.kind === 'tech' || (mine && !t.peer_user_id)) mail.toStaff(`${t.kind === 'tech' ? '[Tech support] ' : ''}Message from ${u.name} <${u.email}>`, `${t.kind === 'support' ? 'Support thread' : t.kind === 'tech' ? 'Technical support thread' : 'For specialist ' + t.title + ' (not linked to an account; reply in the console as them)'}:\n\n${text}`);
+  return { threadId: String(t.id) };
+};
+/* --- chats: pins, edits, technical support, new conversations --- */
+ACT.thread_pin = (u, b) => {
+  const t = D.threadFor(u.id, int(b.id, { min: 1 })); if (!t) throw bad('Conversation not found');
+  if (one('SELECT 1 FROM thread_pins WHERE user_id=? AND thread_id=?', u.id, t.id)) { run('DELETE FROM thread_pins WHERE user_id=? AND thread_id=?', u.id, t.id); return { toast: 'Chat unpinned' }; }
+  if (one('SELECT COUNT(*) n FROM thread_pins WHERE user_id=?', u.id).n >= 10) throw bad('You can pin up to 10 chats');
+  run('INSERT INTO thread_pins (user_id, thread_id, created_at) VALUES (?,?,?)', u.id, t.id, now());
+  return { toast: 'Chat pinned' };
+};
+ACT.msg_pin = (u, b) => {
+  const m = one('SELECT * FROM messages WHERE id=?', int(b.id, { min: 1 })); const t = m && D.threadFor(u.id, m.thread_id);
+  if (!t || m.sender === 'system') throw bad('Message not found');
+  const pinned = one('SELECT 1 FROM message_pins WHERE thread_id=? AND message_id=?', t.id, m.id);
+  if (pinned) run('DELETE FROM message_pins WHERE thread_id=? AND message_id=?', t.id, m.id);
+  else {
+    if (one('SELECT COUNT(*) n FROM message_pins WHERE thread_id=?', t.id).n >= 20) throw bad('Up to 20 pinned messages per chat');
+    run('INSERT INTO message_pins (thread_id, message_id, by_user_id, created_at) VALUES (?,?,?,?)', t.id, m.id, u.id, now());
+  }
+  D.threadChanged(t);
+  return { toast: pinned ? 'Message unpinned' : 'Message pinned' };
+};
+ACT.msg_edit = (u, b) => {
+  const m = one('SELECT * FROM messages WHERE id=?', int(b.id, { min: 1 })); const t = m && D.threadFor(u.id, m.thread_id);
+  if (!t || m.sender_user_id !== u.id || !['user', 'peer'].includes(m.sender)) throw bad('You can edit only your own messages');
+  const text = str(b.text, { min: 1, max: 4000, name: 'a message' });
+  if (text === m.body) return {};
+  run('UPDATE messages SET body=?, edited_at=? WHERE id=?', text, now(), m.id);
+  D.threadChanged(t);
+  return { toast: 'Message edited' };
+};
+ACT.tech_open = (u, b) => { const t = D.techThread(u.id, mode(b.mode || 'hire')); return { go: ['messages', String(t.id)] }; };
+ACT.chat_start = (u, b) => {
+  const spec = D.specById(str(b.specialistId, { max: 40 }));
+  if (!spec || !spec.published) throw bad('Specialist not found');
+  if (spec.user_id === u.id) throw bad('That is your own profile');
+  const t = D.specialistThread(u.id, spec, D.actingName(u), 'Conversation');
+  return { go: ['messages', String(t.id)] };
+};
+ACT.lang_set = (u, b) => {
+  const lang = oneOf(b.lang, ['en', 'et', 'ru'], 'language');
+  const p = j(u.prefs, {}); p.lang = lang; run('UPDATE users SET prefs=? WHERE id=?', JSON.stringify(p), u.id);
 };
 ACT.help_send = (u, b) => {
   const topic = str(b.topic, { max: 80, name: 'topic' }) || 'General';
   const text = str(b.text, { min: 5, max: 4000, name: 'your question' });
   const m = mode(b.mode || 'hire');
-  const t = D.supportThread(u.id, m, 'AfterWorc support', 'Help & support');
+  const tech = /technical|app|log-in|login/i.test(topic);
+  const t = tech ? D.techThread(u.id, m) : D.supportThread(u.id, m, 'AfterWorc support', 'Help & support');
   D.postMessage(t.id, 'user', `[${topic}] ${text}`, u.id, u.name);
   mail.toStaff(`Help request: ${topic}`, `From ${u.name} <${u.email}> (account ${u.id}):\n\n${text}`);
   return { toast: 'Sent. A person replies within one business day', go: ['messages', String(t.id)] };
@@ -165,7 +232,9 @@ function briefFields(b) {
   const budget = str(b.budget, { max: 60, name: 'budget' });
   const start = str(b.start, { max: 60, name: 'start' }) || 'Within 2 weeks';
   const o = b.options || {};
-  const options = { countries: str(o.countries, { max: 60 }), visibility: str(o.visibility, { max: 100 }), deadline: str(o.deadline, { max: 20 }), nda: !!o.nda };
+  const options = { countries: str(o.countries, { max: 60 }), visibility: str(o.visibility, { max: 100 }), deadline: str(o.deadline, { max: 20 }), nda: !!o.nda,
+    country: str(o.country, { max: 60 }), salary: str(o.salary, { max: 60 }), contract: str(o.contract, { max: 40 }) };
+  if (type === 'eor' && !options.country) throw bad('Choose the country where the person will be employed');
   return { type, area, title, descr, people, budget, start, options };
 }
 ACT.brief_save = (u, b) => {
@@ -181,7 +250,7 @@ ACT.brief_save = (u, b) => {
   return { toast: 'Draft saved to Briefs', id: String(r.lastInsertRowid) };
 };
 ACT.brief_send = (u, b) => {
-  needVerified(u);
+  needVerified(u); needActive(u);
   const f = briefFields(b);
   const t = now();
   let id = b.id ? int(b.id, { min: 1 }) : null;
@@ -233,7 +302,7 @@ ACT.request_proposal = (u, b) => {
 
 /* --- deals --- */
 ACT.deal_start = (u, b) => {
-  needVerified(u);
+  needVerified(u); needActive(u);
   const spec = D.specById(str(b.specialistId, { max: 40 }));
   if (!spec || !spec.published) throw bad('Specialist not found');
   if (spec.user_id === u.id) throw bad('You cannot start a deal with yourself');
@@ -284,6 +353,7 @@ ACT.deal_cancel = (u, b) => {
   return { toast: 'Terms withdrawn', go: ['deals'] };
 };
 ACT.ms_fund = (u, b) => {
+  needActive(u);
   const d = ownDeal(u, b.dealId, 'hire');
   if (d.status !== 'active') throw bad('The specialist has not accepted the terms yet');
   const m = one("SELECT * FROM milestones WHERE id=? AND deal_id=? AND status='unfunded'", int(b.msId, { min: 1 }), d.id);
@@ -423,7 +493,10 @@ ACT.opp_decline = (u, b) => { const { o } = ownOpp(u, b.id); run("UPDATE opps SE
 /* --- profile + verification (working) --- */
 ACT.profile_save = (u, b) => {
   const s = D.mySpecialist(u.id, true);
-  const skills = (Array.isArray(b.skills) ? b.skills : []).slice(0, 8).map(x => str(x, { min: 1, max: 40, name: 'skill' }));
+  const reg = D.registerSkills((Array.isArray(b.skills) ? b.skills : []).slice(0, 12).map(x => str(x, { min: 1, max: 40, name: 'skill' })), u.id);
+  const skills = reg.map(x => x.name);
+  const pending = reg.filter(x => x.status === 'pending').map(x => x.name);
+  if (pending.length) mail.toStaff('Skills waiting for approval', `${u.name} <${u.email}> added: ${pending.join(', ')}.\n\nApprove, merge or delete them in the console › Skills.`);
   const prof = { headline: str(b.headline, { max: 120, name: 'headline' }), profession: str(b.profession, { max: 60 }), about: str(b.about, { max: 2000, name: 'about' }), hours: b.hours ? int(b.hours, { min: 1, max: 80, name: 'hours per week' }) : 30, portfolio: str(b.portfolio, { max: 300, name: 'portfolio link' }) };
   if (prof.portfolio && !/^https?:\/\//i.test(prof.portfolio)) throw bad('The portfolio link must start with https://');
   const rate = b.rate === '' || b.rate == null ? null : int(b.rate, { min: 5, max: 1000, name: 'rate' });
@@ -433,7 +506,7 @@ ACT.profile_save = (u, b) => {
   run('UPDATE specialists SET name=?, role=?, area=?, skills=?, rate=?, avail=?, available_now=?, city=?, bio=?, profile=? WHERE id=?',
     name, prof.headline || prof.profession, area, JSON.stringify(skills), rate, avail, /now/i.test(avail) ? 1 : 0, city, prof.about, JSON.stringify(prof), s.id);
   if (name !== u.name) run('UPDATE users SET name=? WHERE id=?', name, u.id);
-  return { toast: s.published ? 'Profile saved. Changes are live' : 'Profile saved' };
+  return { toast: pending.length ? `Profile saved. New skills appear after a check by our team: ${pending.join(', ')}` : s.published ? 'Profile saved. Changes are live' : 'Profile saved' };
 };
 ACT.profile_submit = (u, b) => {
   needVerified(u);
@@ -469,7 +542,7 @@ ACT.verify_interview = (u, b) => {
 
 /* --- money (sandbox) --- */
 ACT.topup = async (u, b) => {
-  needVerified(u);
+  needVerified(u); needActive(u);
   const m = mode(b.mode); const a = int(b.amount, { min: 1, max: 100000, name: 'amount' });
   const method = oneOf(b.method, ['bank', 'sepa', 'card', 'wallet'], 'payment method');
   if (payments.enabled() && method !== 'sepa') {
@@ -492,6 +565,7 @@ function withdrawable(uid) {
   return Math.max(0, Math.min(D.bal(uid, 'work').available, earned - paid));
 }
 ACT.withdraw = (u, b) => {
+  needActive(u);
   need2fa(u, b.code);
   const amt = withdrawable(u.id); if (amt <= 0) throw bad('Nothing to withdraw. Only earnings released from deals can be paid out.');
   const tax = j(u.tax, {});
@@ -504,6 +578,7 @@ ACT.withdraw = (u, b) => {
 
 /* --- card (sandbox: issued by the test issuer) --- */
 ACT.card_issue = (u, b) => {
+  needActive(u);
   const m = mode(b.mode);
   need2fa(u, b.code);
   if (!b.terms) throw bad('Accept the cardholder terms');
@@ -572,20 +647,64 @@ ACT.twofa_disable = (u, b) => {
   return { toast: 'Two-factor authentication off' };
 };
 ACT.password_change = (u, b, req) => {
-  if (!U.verifyPassword(String(b.current || ''), D.userById(u.id).pass_hash)) throw bad('Your current password is not right');
+  U.gateCheck('pwchg:' + u.id, 6);
+  if (!U.verifyPassword(String(b.current || ''), D.userById(u.id).pass_hash)) { U.gateFail('pwchg:' + u.id, 15 * 60000); throw bad('Your current password is not right'); }
   const pw = str(b.next, { min: 10, max: 200, name: 'the new password', trim: false });
+  if (pw.length < 10) throw bad('Use at least 10 characters for the password');
+  if (String(b.repeat ?? '') !== pw) throw bad('The new passwords do not match');
+  if (pw === String(b.current)) throw bad('Choose a password different from the current one');
+  if (u.totp_secret) { if (!b.code) throw bad('Enter the code from your authenticator app', { need2faCode: true }); need2fa(u, b.code); }
   run('UPDATE users SET pass_hash=?, password_changed_at=? WHERE id=?', U.hashPassword(pw), now(), u.id);
   run('DELETE FROM sessions WHERE user_id=? AND id!=?', u.id, req.sid);
   mail.send(u.email, 'Your password was changed', 'Your AfterWorc password was changed and other sessions were signed out. If this wasn\'t you, reset your password and contact info@afterworc.com.');
   return { toast: 'Password changed. Other sessions signed out' };
 };
 ACT.email_change = (u, b) => {
-  if (!U.verifyPassword(String(b.password || ''), D.userById(u.id).pass_hash)) throw bad('Your password is not right');
+  U.gateCheck('emchg:' + u.id, 6);
+  if (!U.verifyPassword(String(b.password || ''), D.userById(u.id).pass_hash)) { U.gateFail('emchg:' + u.id, 15 * 60000); throw bad('Your password is not right'); }
   const e = U.email(b.email);
+  if (e === u.email.toLowerCase()) throw bad('That is already your e-mail');
   if (one('SELECT 1 FROM users WHERE email=?', e)) throw bad('That e-mail is already used by another account');
+  if (u.totp_secret) { if (!b.code) throw bad('Enter the code from your authenticator app', { need2faCode: true }); need2fa(u, b.code); }
   const t = issueToken('email', u.id, 2 * DAY, { email: e });
-  mail.send(e, 'Confirm your new e-mail address', `Confirm this address for your AfterWorc account:\n\n${mail.BASE_URL}/api/auth/confirm-email?token=${t}\n\nThe link works for 48 hours.`);
-  return { toast: 'Confirmation sent to the new address' };
+  const p = j(u.prefs, {}); p.pendingEmail = { email: e, until: now() + 2 * DAY }; run('UPDATE users SET prefs=? WHERE id=?', JSON.stringify(p), u.id);
+  const link = `${mail.BASE_URL}/api/auth/confirm-email?token=${t}`;
+  mail.send(e, 'Confirm your new e-mail address', `Confirm this address for your AfterWorc account:\n\n${link}\n\nThe link works for 48 hours. Until you open it, your account keeps using ${u.email}.`);
+  mail.send(u.email, 'Your AfterWorc e-mail is being changed', `Someone asked to move your AfterWorc account to ${e}. The change happens only after the new address is confirmed.\n\nIf this wasn't you, change your password and contact info@afterworc.com right away.`);
+  return { toast: 'Confirmation link sent to ' + e, devLink: mail.devLinks() ? link : undefined };
+};
+ACT.email_cancel = u => { const p = j(u.prefs, {}); delete p.pendingEmail; run('UPDATE users SET prefs=? WHERE id=?', JSON.stringify(p), u.id); run("DELETE FROM tokens WHERE user_id=? AND kind='email' AND used_at IS NULL", u.id); return { toast: 'E-mail change cancelled' }; };
+/* --- avatar + portfolio --- */
+function ownImage(u, id) { const f = one('SELECT * FROM files WHERE id=? AND user_id=?', int(id, { min: 1, name: 'image' }), u.id); if (!f || !/^image\//.test(f.mime)) throw bad('Upload the image first'); return f; }
+ACT.avatar_set = (u, b) => { const f = ownImage(u, b.fileId); run('UPDATE users SET avatar_file_id=? WHERE id=?', f.id, u.id); return { toast: 'Photo updated' }; };
+ACT.avatar_remove = u => { run('UPDATE users SET avatar_file_id=NULL WHERE id=?', u.id); return { toast: 'Photo removed' }; };
+function portfolioFields(b) {
+  const f = { title: str(b.title, { min: 2, max: 120, name: 'a title' }), descr: str(b.descr, { max: 1500, name: 'description' }), url: str(b.url, { max: 300, name: 'link' }) };
+  if (f.url && !/^https?:\/\//i.test(f.url)) throw bad('The link must start with https://');
+  return f;
+}
+ACT.portfolio_add = (u, b) => {
+  if (one('SELECT COUNT(*) n FROM portfolio WHERE user_id=?', u.id).n >= 24) throw bad('Up to 24 portfolio items');
+  const f = portfolioFields(b); const img = b.fileId ? ownImage(u, b.fileId) : null;
+  if (!img && !f.url) throw bad('Add an image or a link');
+  const idx = one('SELECT COALESCE(MAX(idx),-1)+1 n FROM portfolio WHERE user_id=?', u.id).n;
+  run('INSERT INTO portfolio (user_id, title, descr, url, file_id, idx, created_at) VALUES (?,?,?,?,?,?,?)', u.id, f.title, f.descr, f.url, img ? img.id : null, idx, now());
+  return { toast: 'Added to your portfolio' };
+};
+ACT.portfolio_update = (u, b) => {
+  const p = one('SELECT * FROM portfolio WHERE id=? AND user_id=?', int(b.id, { min: 1 }), u.id); if (!p) throw bad('Item not found');
+  const f = portfolioFields(b); const img = b.fileId ? ownImage(u, b.fileId) : null;
+  run('UPDATE portfolio SET title=?, descr=?, url=?, file_id=? WHERE id=?', f.title, f.descr, f.url, img ? img.id : b.removeImage ? null : p.file_id, p.id);
+  return { toast: 'Portfolio item saved' };
+};
+ACT.portfolio_delete = (u, b) => { run('DELETE FROM portfolio WHERE id=? AND user_id=?', int(b.id, { min: 1 }), u.id); return { toast: 'Removed from your portfolio' }; };
+ACT.portfolio_move = (u, b) => {
+  const list = all('SELECT id FROM portfolio WHERE user_id=? ORDER BY idx, id', u.id).map(r => r.id);
+  const id = int(b.id, { min: 1 }); const i = list.indexOf(id); const k = i + (b.dir === 'up' ? -1 : 1);
+  if (i < 0 || k < 0 || k >= list.length) return {};
+  [list[i], list[k]] = [list[k], list[i]];
+  tx(() => list.forEach((x, n) => run('UPDATE portfolio SET idx=? WHERE id=?', n, x)))();
+  return {};
 };
 ACT.sessions_revoke = (u, b, req) => {
   if (b.id === 'others') { run('DELETE FROM sessions WHERE user_id=? AND id!=?', u.id, req.sid); return { toast: 'Signed out everywhere else' }; }
@@ -671,10 +790,12 @@ router.post('/action', async (req, res) => {
   const fn = typeof b.type === 'string' && Object.hasOwn(ACT, b.type) ? ACT[b.type] : null;
   if (!fn) throw bad('Unknown action');
   if (req.user.closed_at) throw new HttpError(403, 'Account closed');
+  if (req.user.status === 'blocked') throw new HttpError(403, 'This account is blocked');
   U.rateLimit('act:' + req.user.id, 120, 60000);
   const u = D.userById(req.user.id);
   const r = (await fn(u, b, req, res)) || {};
   if (r.logout) { destroySession(req, res); return res.json({ ok: true, ...r }); }
+  bus.sync(req.user.id); // other tabs and devices of this user
   res.json({ ok: true, ...r, state: D.buildState(req.user.id, req.sid) });
 });
 

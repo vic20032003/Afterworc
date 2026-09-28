@@ -318,6 +318,51 @@ CREATE INDEX IF NOT EXISTS ix_notif_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS ix_tx_user ON transactions(user_id, mode);
 CREATE INDEX IF NOT EXISTS ix_opps_spec ON opps(specialist_id);
 CREATE INDEX IF NOT EXISTS ix_sessions_user ON sessions(user_id);
+CREATE TABLE IF NOT EXISTS thread_pins (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, thread_id)
+);
+CREATE TABLE IF NOT EXISTS message_pins (
+  thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+  message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  by_user_id INTEGER,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (thread_id, message_id)
+);
+CREATE TABLE IF NOT EXISTS skills (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL,
+  approved_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS portfolio (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  descr TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL DEFAULT '',
+  file_id INTEGER,
+  idx INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_portfolio_user ON portfolio(user_id);
+CREATE INDEX IF NOT EXISTS ix_skills_status ON skills(status);
 `);
+
+/* Additive migrations for databases created by earlier versions. */
+function addColumn(table, col, def) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+addColumn('users', 'avatar_file_id', 'INTEGER');
+addColumn('users', 'level', "TEXT NOT NULL DEFAULT 'registered'");
+addColumn('users', 'status', "TEXT NOT NULL DEFAULT 'active'");
+addColumn('users', 'status_note', "TEXT NOT NULL DEFAULT ''");
+addColumn('users', 'verified_at', 'INTEGER');
+addColumn('users', 'verified_by', 'TEXT');
+addColumn('messages', 'edited_at', 'INTEGER');
 
 module.exports = { db, DATA_DIR };

@@ -20,7 +20,7 @@ function sendVerify(u) {
 
 router.get('/me', (req, res) => {
   const u = req.user;
-  res.json({ user: u ? { id: u.id, name: u.name, email: u.email, verified: !!u.email_verified, admin: !!u.is_admin, rolePref: u.role_pref } : null, smtp: mail.hasSmtp() });
+  res.json({ user: u ? { id: u.id, name: u.name, email: u.email, verified: !!u.email_verified, admin: !!u.is_admin, rolePref: u.role_pref, avatar: D.mediaUrl(u.avatar_file_id) } : null, smtp: mail.hasSmtp() });
 });
 
 router.post('/register', (req, res) => {
@@ -80,19 +80,23 @@ router.post('/login', (req, res) => {
   const u = one('SELECT * FROM users WHERE email=?', email);
   const ok = U.verifyPassword(String(b.password || ''), u ? u.pass_hash : DUMMY_HASH);
   if (!u || !ok || u.closed_at) { U.gateFail('loginfail:' + req.ip + ':' + email, 15 * 60000); throw bad('E-mail or password is not right'); }
+  if (u.status === 'blocked') throw bad('This account is blocked. Contact info@afterworc.com.', { blocked: true });
   if (!u.email_verified) throw bad('Confirm your e-mail first. We sent you a link.', { unverified: true });
   if (u.totp_secret) {
     if (!b.code) return res.json({ ok: false, need2fa: true });
     if (!U.totpCheck(u.id, u.totp_secret, b.code, true)) throw bad('That code did not work. Check your authenticator app.', { need2fa: true });
   }
   req.user = u;
-  createSession(res, req, u.id);
+  // Native apps ask for a bearer token ({ client: 'app' }); browsers get the HttpOnly cookie.
+  const bearer = b.client === 'app';
+  const token = createSession(res, req, u.id, { bearer });
   audit(req, 'login');
+  if (bearer) return res.json({ ok: true, token, user: { id: u.id, name: u.name, email: u.email, admin: !!u.is_admin, rolePref: u.role_pref } });
   const ctx = U.j(u.prefs, {}).ctx;
   res.json({ ok: true, redirect: u.is_admin && b.admin ? '/admin' : `/app#/${u.role_pref}/${ctx && u.role_pref === 'hire' ? 'pp/' + encodeURIComponent(ctx) : 'home'}` });
 });
 
-router.post('/logout', (req, res) => { destroySession(req, res); res.json({ ok: true }); });
+router.post('/logout', (req, res) => { if (req.user) require('../ws').kick(req.user.id, req.sid); destroySession(req, res); res.json({ ok: true }); });
 
 router.post('/forgot', (req, res) => {
   U.rateLimit('forgot:' + req.ip, 5, HOUR);
@@ -125,7 +129,8 @@ router.get('/confirm-email', (req, res) => {
   const t = consumeToken('email', String(req.query.token || ''));
   if (!t || !t.data || one('SELECT 1 FROM users WHERE email=?', t.data.email)) return res.redirect('/#login-expired');
   const old = D.userById(t.userId);
-  run('UPDATE users SET email=?, email_verified=1 WHERE id=?', t.data.email, t.userId);
+  const prefs = U.j(old.prefs, {}); delete prefs.pendingEmail;
+  run('UPDATE users SET email=?, email_verified=1, prefs=? WHERE id=?', t.data.email, JSON.stringify(prefs), t.userId);
   mail.send(old.email, 'Your AfterWorc e-mail was changed', `Your account now uses ${t.data.email}. If this wasn't you, contact info@afterworc.com right away.`);
   res.redirect('/app#/' + old.role_pref + '/settings');
 });

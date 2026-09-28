@@ -2,15 +2,18 @@
 /* AfterWorc business logic shared by the account API and the staff console. */
 const { db } = require('./db');
 const mail = require('./mail');
+const bus = require('./bus');
 const U = require('./util');
 const { now, DAY, HOUR, j, bad, HttpError, eur, fmtDay, fmtDayW, fmtDayTime, fmtAgo, inDays } = U;
 
 const REVIEW_DAYS = 7;
 const WORKER_FEE_PCT = Number(process.env.WORKER_FEE_PCT || 0);
 const MATCHER = { name: process.env.MATCHER_NAME || 'AfterWorc matching', role: process.env.MATCHER_ROLE || 'Matching team · a person reads every brief' };
-const AREAS = ['Development', 'Design', 'Marketing', 'Business Support', 'Content', 'Data & Infrastructure', 'Quality & Security'];
-const TYPES = ['task', 'person', 'team', 'dept'];
-const TYPEL = { task: 'Task', person: 'Specialist', team: 'Ready team', dept: 'Department' };
+const AREAS = ['Development', 'Payments', 'Design', 'Marketing', 'Business Support', 'Content', 'Data & Infrastructure', 'Quality & Security'];
+const TYPES = ['task', 'person', 'team', 'dept', 'eor'];
+const TYPEL = { task: 'Task', person: 'Specialist', team: 'Ready team', dept: 'Department', eor: 'Hire abroad (EOR)' };
+const LEVELS = ['registered', 'verified', 'checked'];
+const STATUSES = ['active', 'hold', 'blocked'];
 const NOTIF_KEYS = ['shortlist', 'delivery', 'payment', 'card', 'message', 'news'];
 const DEFAULT_PREFS = { email: { shortlist: true, delivery: true, payment: true, card: true, message: false, news: false }, app: { shortlist: true, delivery: true, payment: true, card: true, message: true, news: true }, cookies: { analytics: false, marketing: false } };
 const VERIFY_STEPS = [['id', 'ID verified'], ['skills', 'Skills test'], ['refs', 'References'], ['interview', 'Interview in person'], ['checked', 'Checked in person']];
@@ -51,10 +54,39 @@ function mySpecialist(userId, create = false) {
   return s;
 }
 
-function specView(s) {
+/* ---------- skills catalog (pre-moderated) ---------- */
+let approvedCache = null;
+function approvedSkills() {
+  if (!approvedCache) approvedCache = new Map(all("SELECT name FROM skills WHERE status='approved'").map(r => [r.name.toLowerCase(), r.name]));
+  return approvedCache;
+}
+function skillsChanged() { approvedCache = null; }
+/** Only approved skills are shown to other people; pending ones stay visible to their owner, marked as such. */
+const publicSkills = list => { const a = approvedSkills(); return (list || []).filter(x => a.has(String(x).toLowerCase())).map(x => a.get(String(x).toLowerCase())); };
+/** Canonical names for a user's skills; unknown ones are added to the moderation queue. Returns [{name, status}]. */
+function registerSkills(names, userId) {
+  const out = [];
+  for (const raw of names) {
+    const name = String(raw).trim().replace(/\s+/g, ' ');
+    if (!name || out.some(x => x.name.toLowerCase() === name.toLowerCase())) continue;
+    let row = one('SELECT * FROM skills WHERE name=?', name);
+    if (!row) { run("INSERT INTO skills (name, status, created_by, created_at) VALUES (?, 'pending', ?, ?)", name, userId, now()); row = one('SELECT * FROM skills WHERE name=?', name); bus.toStaff({ t: 'sync' }); }
+    out.push({ name: row.name, status: row.status });
+  }
+  return out;
+}
+const mediaUrl = id => id ? `/api/media/${id}` : null;
+function avatarOf(userId) { if (!userId) return null; const u = one('SELECT avatar_file_id FROM users WHERE id=?', userId); return u ? mediaUrl(u.avatar_file_id) : null; }
+function portfolioOf(userId) {
+  if (!userId) return [];
+  return all('SELECT * FROM portfolio WHERE user_id=? ORDER BY idx, id', userId).map(p => ({ id: p.id, title: p.title, descr: p.descr, url: p.url, image: mediaUrl(p.file_id) }));
+}
+
+function specView(s, { withPortfolio = false } = {}) {
   if (!s) return null;
   return {
-    id: s.id, name: s.name, role: s.role || 'Specialist', area: s.area, skills: j(s.skills, []), rate: s.rate, monthly: s.monthly,
+    id: s.id, name: s.name, role: s.role || 'Specialist', area: s.area, skills: publicSkills(j(s.skills, [])), rate: s.rate, monthly: s.monthly,
+    avatar: avatarOf(s.user_id), portfolio: withPortfolio ? portfolioOf(s.user_id) : undefined,
     lv: s.level === 'checked' ? 'checked' : s.level === 'verified' ? 'id' : 'registered', level: s.level,
     avail: s.avail, now: !!s.available_now, city: s.city, langs: s.langs, deals: s.deals, rating: s.rating,
     bio: s.bio, checkedBy: s.checked_by, checkedOn: s.checked_on, history: j(s.history, []), linked: !!s.user_id, published: !!s.published
@@ -78,6 +110,8 @@ function notify(userId, mode, title, sub, route = 'home', param = null, key = nu
   const u = userById(userId); if (!u || u.closed_at) return;
   const p = prefsOf(u);
   if (!key || p.app[key] !== false) run('INSERT INTO notifications (user_id, mode, title, sub, route, param, unread, created_at) VALUES (?,?,?,?,?,?,1,?)', userId, mode, title, sub || '', route, param == null ? null : String(param), now());
+  bus.toUser(userId, { t: 'notify', title, sub: sub || '', mode, route, param: param == null ? null : String(param) });
+  bus.sync(userId);
   if (key && p.email[key]) {
     const link = `${mail.BASE_URL}/app#/${mode}/${route}${param ? '/' + param : ''}`;
     mail.send(u.email, title, `${emailBody || sub || title}\n\nOpen in AfterWorc: ${link}\n\nYou can change which e-mails you get in Settings › Notifications.`);
@@ -88,6 +122,15 @@ function supportThread(userId, mode, title, sub) {
   let t = one("SELECT * FROM threads WHERE user_id=? AND mode=? AND kind='support' ORDER BY id LIMIT 1", userId, mode);
   if (!t) {
     const r = run("INSERT INTO threads (user_id, mode, kind, title, sub, updated_at) VALUES (?,?,'support',?,?,?)", userId, mode, title || `${MATCHER.name}`, sub || 'Questions, briefs and support', now());
+    t = one('SELECT * FROM threads WHERE id=?', r.lastInsertRowid);
+  }
+  return t;
+}
+/** Technical support: its own conversation, separate from matching and general support. */
+function techThread(userId, mode) {
+  let t = one("SELECT * FROM threads WHERE user_id=? AND mode=? AND kind='tech' ORDER BY id LIMIT 1", userId, mode);
+  if (!t) {
+    const r = run("INSERT INTO threads (user_id, mode, kind, title, sub, updated_at) VALUES (?,?,'tech',?,?,?)", userId, mode, 'AfterWorc technical support', 'Log-in, payments, card, app problems', 0);
     t = one('SELECT * FROM threads WHERE id=?', r.lastInsertRowid);
   }
   return t;
@@ -108,8 +151,19 @@ function postMessage(threadId, sender, body, senderUserId = null, senderName = '
   const inc = { user_unread: sender !== 'user' ? 1 : 0, peer_unread: sender !== 'peer' && t.peer_user_id ? 1 : 0, staff_unread: sender === 'user' || sender === 'peer' ? (t.kind === 'support' || !t.peer_user_id || sender === 'peer' ? 1 : 0) : 0 };
   if (sender === 'system') { inc.user_unread = 0; inc.peer_unread = 0; inc.staff_unread = 0; }
   run('UPDATE threads SET user_unread=user_unread+?, peer_unread=peer_unread+?, staff_unread=staff_unread+?, updated_at=? WHERE id=?', inc.user_unread, inc.peer_unread, inc.staff_unread, now(), threadId);
+  threadChanged(t);
   return t;
 }
+
+/** Push "this conversation changed" to everyone in it (owner, linked specialist, staff). */
+function threadChanged(t) {
+  const msg = { t: 'thread', threadId: String(t.id) };
+  bus.toUser(t.user_id, msg); bus.sync(t.user_id);
+  if (t.peer_user_id) { bus.toUser(t.peer_user_id, msg); bus.sync(t.peer_user_id); }
+  bus.toStaff({ t: 'sync' });
+}
+/** Who may read and write a thread as a user (not staff). */
+function threadFor(userId, id) { return one('SELECT * FROM threads WHERE id=? AND (user_id=? OR peer_user_id=?)', id, userId, userId); }
 
 /* =========================================================
    Money (sandbox ledger: no real funds move)
@@ -269,14 +323,25 @@ function buildState(userId, sid) {
     proposal: j(o.proposal, null), by: o.kind === 'Invitation' ? MATCHER.name : null
   })) : [];
 
-  const threads = all(`SELECT t.*, u.name AS owner_name FROM threads t JOIN users u ON u.id=t.user_id WHERE t.user_id=? OR t.peer_user_id=? ORDER BY t.updated_at DESC`, userId, userId).map(t => {
+  for (const m of ['hire', 'work']) techThread(userId, m);
+  const ws = require('./ws');
+  const pins = new Set(all('SELECT thread_id FROM thread_pins WHERE user_id=?', userId).map(r => r.thread_id));
+  const threads = all(`SELECT t.*, u.name AS owner_name, u.avatar_file_id AS owner_avatar FROM threads t JOIN users u ON u.id=t.user_id WHERE t.user_id=? OR t.peer_user_id=? ORDER BY t.updated_at DESC`, userId, userId).map(t => {
     const mine = t.user_id === userId;
-    const msgs = all('SELECT * FROM messages WHERE thread_id=? ORDER BY id', t.id).map(m => ({
-      f: m.sender === 'system' ? 'sys' : ((mine && m.sender === 'user') || (!mine && m.sender === 'peer')) ? 'me' : 'them',
-      t: m.body, tm: fmtAgo(m.created_at), who: m.sender === 'staff' ? (m.sender_name || 'AfterWorc') : ''
-    }));
+    const pinnedMsgs = new Set(all('SELECT message_id FROM message_pins WHERE thread_id=?', t.id).map(r => r.message_id));
+    const rows = all('SELECT * FROM (SELECT * FROM messages WHERE thread_id=? ORDER BY id DESC LIMIT 400) ORDER BY id', t.id);
+    const msgs = rows.map(m => {
+      const me = (mine && m.sender === 'user') || (!mine && m.sender === 'peer');
+      return { id: m.id, f: m.sender === 'system' ? 'sys' : me ? 'me' : 'them', t: m.body, tm: fmtAgo(m.created_at), at: m.created_at,
+        who: m.sender === 'staff' ? (m.sender_name || 'AfterWorc') : '', edited: !!m.edited_at, pinned: pinnedMsgs.has(m.id), canEdit: me && m.sender_user_id === userId };
+    });
+    const staffSide = t.kind === 'support' || t.kind === 'tech';
+    const peerId = mine ? t.peer_user_id : t.user_id;
+    const avatar = mine ? (t.specialist_id ? avatarOf(t.peer_user_id) : null) : (t.owner_avatar ? mediaUrl(t.owner_avatar) : null);
     return { id: String(t.id), kind: t.kind, name: mine ? t.title : (t.peer_title || t.owner_name), sub: t.sub, mode: mine ? t.mode : 'work',
-      unread: mine ? !!t.user_unread : !!t.peer_unread, specialist: mine ? t.specialist_id : null, msgs };
+      unread: mine ? !!t.user_unread : !!t.peer_unread, specialist: mine ? t.specialist_id : null, avatar, pinned: pins.has(t.id),
+      canCall: staffSide || !!peerId, online: staffSide ? ws.staffOnline() : peerId ? ws.isOnline(peerId) : false,
+      updated: t.updated_at, msgs };
   });
 
   const notifs = all('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 60', userId).map(n => ({ id: n.id, mode: n.mode, t: n.title, s: n.sub, go: [n.route, n.param], unread: !!n.unread, at: fmtAgo(n.created_at) }));
@@ -317,14 +382,19 @@ function buildState(userId, sid) {
   let prof = null;
   if (spec) {
     const p = j(spec.profile, {});
-    prof = { headline: p.headline || spec.role || '', profession: p.profession || '', about: p.about || spec.bio || '', skills: j(spec.skills, []), rate: spec.rate || '', hours: p.hours || 30,
+    const a = approvedSkills();
+    prof = { headline: p.headline || spec.role || '', profession: p.profession || '', about: p.about || spec.bio || '', skills: j(spec.skills, []),
+      skillStatus: Object.fromEntries(j(spec.skills, []).map(x => [x, a.has(String(x).toLowerCase()) ? 'approved' : 'pending'])), rate: spec.rate || '', hours: p.hours || 30,
       avail: spec.avail, portfolio: p.portfolio || '', area: spec.area, city: spec.city, langs: spec.langs, status: spec.published ? 'published' : spec.submitted_at ? 'submitted' : 'draft', level: spec.level, id: spec.id };
   }
 
   const sessions = all('SELECT id, created_at, last_seen, ua, ip FROM sessions WHERE user_id=? ORDER BY last_seen DESC', userId).map(s => ({ id: s.id.slice(0, 16), current: s.id === sid, ua: uaLabel(s.ua), ip: s.ip, seen: fmtAgo(s.last_seen) }));
 
   return {
-    me: { id: u.id, name: u.name || u.email.split('@')[0], email: u.email, initials: U.initials(u.name || u.email), verified: !!u.email_verified, admin: !!u.is_admin, rolePref: u.role_pref, created: U.fmtDate(u.created_at), passwordChanged: u.password_changed_at ? fmtDay(u.password_changed_at) : null, termsAt: u.terms_accepted_at ? fmtDay(u.terms_accepted_at) : null },
+    me: { id: u.id, name: u.name || u.email.split('@')[0], email: u.email, initials: U.initials(u.name || u.email), verified: !!u.email_verified, admin: !!u.is_admin, rolePref: u.role_pref, created: U.fmtDate(u.created_at), passwordChanged: u.password_changed_at ? fmtDay(u.password_changed_at) : null, termsAt: u.terms_accepted_at ? fmtDay(u.terms_accepted_at) : null,
+      avatar: mediaUrl(u.avatar_file_id), level: u.level || 'registered', status: u.status || 'active', statusNote: u.status_note || '', verifiedAt: u.verified_at ? fmtDay(u.verified_at) : null,
+      pendingEmail: (() => { const pe = j(u.prefs, {}).pendingEmail; return pe && pe.until > now() ? pe.email : null; })(), lang: j(u.prefs, {}).lang || null },
+    portfolio: portfolioOf(userId),
     acting: actingName(u), actingOrgId: u.acting_org_id || null,
     orgs: orgs.map(o => ({ id: o.id, name: o.name, country: o.country, vat: o.vat, role: o.role, members: all('SELECT u.name, u.email, m.role FROM org_members m JOIN users u ON u.id=m.user_id WHERE m.org_id=?', o.id), invites: all('SELECT email, role, created_at FROM org_invites WHERE org_id=? AND accepted_at IS NULL', o.id).map(i => ({ email: i.email, role: i.role, at: fmtDay(i.created_at) })) })),
     twofa: !!u.totp_secret, people, briefs, deals, opps, threads, notifs, money, cards, verify, prof,
@@ -339,6 +409,7 @@ function uaLabel(ua) {
 }
 
 module.exports = {
+  LEVELS, STATUSES, approvedSkills, skillsChanged, publicSkills, registerSkills, mediaUrl, avatarOf, portfolioOf, techThread, threadChanged, threadFor,
   REVIEW_DAYS, WORKER_FEE_PCT, MATCHER, AREAS, TYPES, TYPEL, NOTIF_KEYS, VERIFY_STEPS, DEFAULT_PREFS,
   tx, one, all, run, userById, prefsOf, ensureUserSetup, defaultCard, mySpecialist, specView, specById, orgsOf, actingName,
   notify, supportThread, specialistThread, postMessage, bal, addTx, moveBal, addInvoice,

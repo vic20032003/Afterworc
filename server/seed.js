@@ -10,6 +10,8 @@ const PROD = process.env.NODE_ENV === 'production';
 
 const DIRECTORY = [
   { id: 'mk', name: 'Mart Kask', role: 'Senior Backend Engineer', area: 'Development', skills: ['Go', 'PostgreSQL', 'Kubernetes', 'gRPC'], rate: 62, level: 'checked', avail: 'From 1 Oct', now: 0, deals: 9, rating: 5.0, city: 'Tallinn', langs: 'EN · ET', bio: 'Backend engineer, payments and high-load APIs. Ex-lead at a Nordic scale-up.', by: 'Anna R.', on: 'Sep 2026', history: [['Client portal, milestone 2', 1600], ['Performance review', 900], ['Integration fixes', 600]] },
+  { id: 'ep', name: 'Eva Pärn', role: 'Payments Operations Lead · EMI / PSP', area: 'Payments', skills: ['Payment operations', 'Reconciliation', 'SEPA', 'Card schemes'], rate: 65, level: 'checked', avail: 'Available now', now: 1, deals: 8, rating: 4.9, city: 'Tallinn', langs: 'EN · ET · RU', bio: 'Ran payment operations for an Estonian EMI: SEPA and card flows, reconciliation, safeguarding and scheme reporting.', by: 'Anna R.', on: 'Sep 2026', history: [['Reconciliation set-up for a PSP', 2400], ['Chargeback process', 1500]] },
+  { id: 'ai', name: 'Artur Ivanov', role: 'AML & Compliance Analyst', area: 'Payments', skills: ['AML', 'KYC', 'Transaction monitoring', 'PSD2'], rate: 52, level: 'checked', avail: 'From 12 Oct', now: 0, deals: 5, rating: 4.8, city: 'Tallinn', langs: 'EN · RU · ET', bio: 'AML/KYC analyst for fintechs and EMIs. Onboarding reviews, monitoring rules and FIU reporting.', by: 'Anna R.', on: 'Aug 2026', history: [['KYC backlog clean-up', 1800], ['Monitoring rules review', 1200]] },
   { id: 'lt', name: 'Liis Tamm', role: 'Senior UI/UX Designer', area: 'Design', skills: ['Figma', 'Design systems', 'SaaS', 'User research'], rate: 48, level: 'checked', avail: 'Available now', now: 1, deals: 14, rating: 4.9, city: 'Tartu', langs: 'EN · ET', bio: 'Product designer for B2B SaaS. 9 years; led design systems for two Baltic fintechs.', by: 'Anna R.', on: 'Aug 2026', history: [['Landing redesign, wireframes', 400], ['Design system audit', 1800], ['Onboarding flow', 1200]] },
   { id: 'js', name: 'Jelena Sokolova', role: 'Backend + DevOps Engineer', area: 'Development', skills: ['Java', 'Spring', 'AWS', 'Terraform'], rate: 58, level: 'checked', avail: 'Available now', now: 1, deals: 11, rating: 4.8, city: 'Tallinn', langs: 'EN · RU · ET', bio: 'Builds and runs B2B platforms end to end. AWS certified.', by: 'Anna R.', on: 'Sep 2026', history: [['AWS migration', 4200], ['CI/CD pipeline', 1500]] },
   { id: 'km', name: 'Kadri Mets', role: 'Marketing Lead', area: 'Marketing', skills: ['B2B', 'LinkedIn Ads', 'Content', 'Team lead'], rate: 45, level: 'checked', avail: 'Available now', now: 1, deals: 6, rating: 4.9, city: 'Tallinn', langs: 'EN · ET', bio: 'Leads marketing departments for B2B SaaS companies: growth, paid social and content.', by: 'Victor B.', on: 'Aug 2026', history: [['Marketing department, month 1', 12000]] },
@@ -153,5 +155,21 @@ function seedDemo() {
   console.log(`[seed] demo account: ${email} / ${pw}`);
 }
 
-function run_() { seedDirectory(); seedAdmin(); seedDemo(); }
+/* Skills catalog: a starter set plus every skill already on a profile, all approved. New ones added by users wait for staff. */
+const STARTER_SKILLS = ['Go', 'TypeScript', 'React', 'Node.js', 'PostgreSQL', 'Kubernetes', 'AWS', 'Docker', 'Python', 'Java', 'Kotlin', 'Swift',
+  'Figma', 'Design systems', 'UX research', 'Prototyping', 'Webflow', 'SEO', 'Google Ads', 'LinkedIn Ads', 'Content', 'Analytics', 'Email marketing',
+  'Jira', 'Scrum', 'Excel', 'Customer support', 'Bookkeeping', 'Copywriting', 'Estonian', 'Russian', 'Technical writing', 'Video editing',
+  'SQL', 'dbt', 'Airflow', 'Terraform', 'GCP', 'BigQuery', 'Playwright', 'Cypress', 'OWASP', 'Pen testing', 'API tests',
+  'Payment operations', 'Reconciliation', 'SEPA', 'SWIFT', 'Card schemes', 'Chargebacks', 'PSD2', 'Open banking', 'AML', 'KYC', 'Transaction monitoring',
+  'Safeguarding', 'EMI licensing', 'PCI DSS', 'Stripe', 'Adyen', 'Payroll', 'HR operations', 'Employment law', 'Treasury'];
+function seedSkills() {
+  const ins = db.prepare("INSERT OR IGNORE INTO skills (name, status, created_at, approved_at) VALUES (?, 'approved', ?, ?)");
+  if (!one('SELECT COUNT(*) n FROM skills').n) {
+    const t = now();
+    const fromProfiles = db.prepare('SELECT skills FROM specialists').all().flatMap(r => U.j(r.skills, []));
+    D.tx(() => [...STARTER_SKILLS, ...fromProfiles].forEach(n => ins.run(String(n).trim(), t, t)))();
+  }
+}
+
+function run_() { seedDirectory(); seedSkills(); seedAdmin(); seedDemo(); }
 module.exports = { run: run_, DIRECTORY };

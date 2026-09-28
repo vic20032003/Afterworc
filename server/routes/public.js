@@ -8,15 +8,54 @@ const { one, all, run } = D;
 const { now, HOUR, bad, HttpError, str } = U;
 
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+const { DATA_DIR } = require('../db');
 
 router.get('/specialists', (req, res) => {
   res.set('Cache-Control', 'public, max-age=60');
   const rows = all("SELECT * FROM specialists WHERE published=1 ORDER BY level='checked' DESC, deals DESC, name");
   res.json(rows.map(s => {
     const v = D.specView(s);
-    return { id: v.id, n: v.name, r: v.role, area: v.area, skills: v.skills, rate: v.rate, monthly: v.monthly, lv: s.level === 'checked' ? 'checked' : 'verified',
-      now: v.now, avail: v.avail, deals: v.deals, stars: v.rating ? v.rating.toFixed(1) : 'new', city: v.city, langs: v.langs, bio: v.bio, history: v.history, checkedBy: v.checkedBy, checkedOn: v.checkedOn };
+    return pubSpec(s, v);
   }));
+});
+const pubSpec = (s, v) => ({ id: v.id, n: v.name, r: v.role, area: v.area, skills: v.skills, rate: v.rate, monthly: v.monthly, lv: s.level === 'checked' ? 'checked' : 'verified',
+  now: v.now, avail: v.avail, deals: v.deals, stars: v.rating ? v.rating.toFixed(1) : 'new', city: v.city, langs: v.langs, bio: v.bio, history: v.history, checkedBy: v.checkedBy, checkedOn: v.checkedOn,
+  avatar: v.avatar, portfolio: v.portfolio });
+router.get('/specialists/:id', (req, res) => {
+  const s = one('SELECT * FROM specialists WHERE id=? AND published=1', String(req.params.id).slice(0, 60));
+  if (!s) throw new HttpError(404, 'Profile not found');
+  res.json(pubSpec(s, D.specView(s, { withPortfolio: true })));
+});
+
+/* Approved skills for autocomplete (the catalog is pre-moderated by staff). */
+router.get('/skills', (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 40);
+  const rows = q ? all("SELECT name FROM skills WHERE status='approved' AND name LIKE ? ESCAPE '\\' ORDER BY (name LIKE ? ESCAPE '\\') DESC, name LIMIT 20", '%' + q.replace(/[\\%_]/g, m => '\\' + m) + '%', q.replace(/[\\%_]/g, m => '\\' + m) + '%')
+    : all("SELECT name FROM skills WHERE status='approved' ORDER BY name LIMIT 400");
+  res.set('Cache-Control', 'public, max-age=60');
+  res.json(rows.map(r => r.name));
+});
+
+/* Public images: only files used as someone's photo or in a portfolio. */
+router.get('/media/:id', (req, res) => {
+  const id = +req.params.id;
+  const f = Number.isInteger(id) && one('SELECT * FROM files WHERE id=?', id);
+  const used = f && (one('SELECT 1 FROM users WHERE avatar_file_id=? AND closed_at IS NULL', f.id) || one('SELECT 1 FROM portfolio WHERE file_id=?', f.id));
+  if (!used || !/^image\/(png|jpeg|gif|webp)$/.test(f.mime)) throw new HttpError(404, 'Not found');
+  res.setHeader('Content-Type', f.mime);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
+  fs.createReadStream(path.join(DATA_DIR, 'uploads', path.basename(f.path))).on('error', () => res.status(404).end()).pipe(res);
+});
+
+/* WebRTC servers for calls. STUN is public; TURN (for strict networks) comes from the environment. */
+router.get('/rtc', (req, res) => {
+  if (!req.user) throw new HttpError(401, 'Log in to continue');
+  const ice = [{ urls: (process.env.STUN_URLS || 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302').split(',').map(x => x.trim()).filter(Boolean) }];
+  if (process.env.TURN_URL) ice.push({ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' });
+  res.json({ iceServers: ice });
 });
 
 const TYPES = { task: 'A task', person: 'A specialist', team: 'A ready team', dept: 'A department' };

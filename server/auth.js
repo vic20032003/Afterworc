@@ -25,12 +25,13 @@ const q = {
 };
 setInterval(() => q.purge.run(now()), 3600000).unref();
 
-function createSession(res, req, userId) {
+/** Starts a session. Browsers get an HttpOnly cookie; native apps (bearer: true) get the token in the response instead. */
+function createSession(res, req, userId, { bearer = false } = {}) {
   const token = randToken(32);
   const t = now();
   q.insert.run(sha256(token), userId, t, t, t + SESSION_TTL, String(req.headers['user-agent'] || '').slice(0, 200), req.ip);
-  setCookie(res, token, SESSION_TTL);
-  return sha256(token);
+  if (!bearer) setCookie(res, token, SESSION_TTL);
+  return bearer ? token : sha256(token);
 }
 function setCookie(res, token, maxAge) {
   res.append('Set-Cookie', `${COOKIE}=${token ? encodeURIComponent(token) : ''}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAge / 1000)}${SECURE ? '; Secure' : ''}`);
@@ -40,25 +41,35 @@ function destroySession(req, res) {
   setCookie(res, '', 0);
 }
 
-/** Attaches req.user (or null) from the session cookie. */
+/** Resolves a raw session token to { sid, user } (or null). Shared by HTTP and WebSocket. */
+function userFromToken(token) {
+  if (!token || typeof token !== 'string' || token.length > 200) return null;
+  const sid = sha256(token);
+  const row = q.get.get(sid);
+  if (row && row.expires_at > now() && !row.closed_at && row.status !== 'blocked') {
+    if (now() - row.last_seen > 60000) q.touch.run(now(), now() + SESSION_TTL, sid);
+    return { sid, user: row };
+  }
+  if (row) q.del.run(sid);
+  return null;
+}
+const bearerOf = req => { const m = /^Bearer\s+([A-Za-z0-9]{16,200})$/.exec(String(req.headers.authorization || '')); return m ? m[1] : null; };
+const cookieToken = req => parseCookies(req.headers.cookie)[COOKIE];
+
+/** Attaches req.user (or null) from the session cookie, or from an Authorization: Bearer token (mobile apps). */
 function sessionMiddleware(req, res, next) {
   req.user = null;
-  const token = parseCookies(req.headers.cookie)[COOKIE];
-  if (token) {
-    const sid = sha256(token);
-    const row = q.get.get(sid);
-    if (row && row.expires_at > now() && !row.closed_at) {
-      req.sid = sid;
-      req.user = row;
-      if (now() - row.last_seen > 60000) q.touch.run(now(), now() + SESSION_TTL, sid);
-    } else if (row) { q.del.run(sid); }
-  }
+  const bearer = bearerOf(req);
+  const s = userFromToken(bearer || cookieToken(req));
+  if (s) { req.sid = s.sid; req.user = s.user; req.bearer = !!bearer; }
   next();
 }
 
 /** Blocks cross-site state-changing requests: JSON bodies + same-origin header. */
 function csrfGuard(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  // Bearer tokens are never sent automatically by a browser, so they cannot be forged cross-site.
+  if (bearerOf(req) && !req.headers.cookie) return next();
   if (req.get('X-Requested-With') !== 'afterworc') return next(new HttpError(403, 'Request blocked'));
   const origin = req.get('Origin');
   if (origin) {
@@ -97,4 +108,4 @@ function audit(req, action, detail) {
     .run(req.user ? req.user.id : null, action, detail ? String(detail).slice(0, 500) : null, req.ip, now());
 }
 
-module.exports = { sessionMiddleware, csrfGuard, requireUser, requireAdmin, createSession, destroySession, issueToken, consumeToken, audit };
+module.exports = { userFromToken, cookieToken, bearerOf, sessionMiddleware, csrfGuard, requireUser, requireAdmin, createSession, destroySession, issueToken, consumeToken, audit };
