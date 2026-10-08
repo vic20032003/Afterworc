@@ -68,7 +68,6 @@ Layer.prototype.handle_request = function (req, res, next) {
 };
 
 seed.run();
-if (require.main === module) setTimeout(() => require('./compass').backfill(), 5000).unref();   // the last 3 days to the team's app
 setInterval(() => { try { D.sweepAutoAccept(); } catch (e) { console.error(e); } }, 15 * 60000).unref();
 
 if (require.main === module) {
