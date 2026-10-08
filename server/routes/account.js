@@ -195,6 +195,7 @@ ACT.brief_send = (u, b) => {
   D.notify(u.id, 'hire', `Brief sent: ${f.title}`, `Shortlist of up to 3 checked people by ${U.fmtDayTime(t + 48 * HOUR)}`, 'brief', id);
   mail.send(u.email, `We received your brief: ${f.title}`, `Thank you. A person on our matching team reads your brief and may ask one or two questions.\n\nYour shortlist of up to 3 checked people arrives by ${U.fmtDayTime(t + 48 * HOUR)} (Tallinn time).`);
   mail.toStaff(`New brief: ${f.title}`, `${D.actingName(u)} (${u.email})\nType: ${D.TYPEL[f.type]} · ${f.area}\nPeople: ${f.people}\nBudget: ${f.budget}\nStart: ${f.start}\n\n${f.descr}`);
+  require('../compass').brief(Object.assign({ id, sent_at: t }, f), D.actingName(u), u.email, D.TYPEL[f.type]);   // the team's app
   return { toast: 'Brief sent. We read it shortly', go: ['brief', String(id)] };
 };
 ACT.brief_delete = (u, b) => { run("DELETE FROM briefs WHERE id=? AND user_id=? AND status='draft'", int(b.id, { min: 1 }), u.id); return { toast: 'Draft deleted', go: ['briefs'] }; };
@@ -442,6 +443,7 @@ ACT.profile_submit = (u, b) => {
   if (missing.length) throw bad('Add ' + missing.join(', ') + ' first');
   run('UPDATE specialists SET submitted_at=? WHERE id=?', now(), s.id);
   mail.toStaff(`Profile submitted: ${s.name}`, `${u.email} submitted their profile for review. Publish it in the console after the ID check.`);
+  require('../compass').profile(Object.assign({}, s, { submitted_at: now() }), u.email);   // the team's app
   return { toast: 'Submitted. Your profile goes public after your ID check' };
 };
 function setVerify(uid, key, val) { const u = D.userById(uid); const v = j(u.verify, {}); v[key] = { ...(v[key] || {}), ...val }; run('UPDATE users SET verify=? WHERE id=?', JSON.stringify(v), uid); }

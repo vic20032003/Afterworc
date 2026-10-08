@@ -49,6 +49,7 @@ router.post('/register', (req, res) => {
     devLink = sendVerify(u);
     D.notify(id, role, 'Welcome to AfterWorc', role === 'hire' ? 'Post your first brief: a person reads it and sends up to 3 checked matches within 48 hours' : 'Build your profile, then book your interview to get checked', role === 'hire' ? 'newbrief' : 'profile');
     mail.toStaff('New sign-up', `${email} signed up (${role === 'hire' ? 'hiring' : 'working'}).`);
+    require('../compass').signup(u);   // the team's app: every founder is notified at once
   }
   res.json({ ok: true, devLink: mail.devLinks() ? devLink : undefined });
 });
