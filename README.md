@@ -51,6 +51,18 @@ Without `SMTP_URL`, e-mails (verification links, reset links, codes) are printed
 - Money: confirm SEPA top-ups, mark payouts as paid; see booked calls and interviews.
 - E-mails: everything the platform sent.
 
+## Sign in with Google, Facebook, Apple and GitHub
+
+The sign-up and log-in pages have "Continue with" buttons for Google, Apple, Facebook and GitHub. Each provider turns on when its keys are set (see `.env.example`); in production, buttons without keys are hidden, and elsewhere they show greyed out.
+
+Register this callback URL with each provider: `https://<your-domain>/api/auth/oauth/<google|facebook|apple|github>/callback`.
+
+How accounts are matched:
+- A provider account used before logs straight in. Two-factor authentication still applies: the person is asked for their code.
+- A new address creates an account with the e-mail already confirmed. If the Terms box wasn't ticked on the sign-up page (or the person came from the log-in page), they are asked to accept the Terms and pick Hire or Work first.
+- If an AfterWorc account already uses the same e-mail, Google, Apple and GitHub join it, because they confirm the address; the owner gets an e-mail about it. Facebook doesn't say whether an address is confirmed, so it never joins an existing account: the person logs in with their password instead.
+- Accounts created this way have no password. "Forgot your password?" sets one, which settings that ask for the password (change e-mail, delete account) need.
+
 ## Money: what is live and what is test mode
 
 **Top-ups can be real.** Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and add the webhook `https://<your-domain>/api/stripe/webhook` in the Stripe dashboard (events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`). Card, bank-link and wallet top-ups then open Stripe Checkout. A balance is credited only from the signed webhook, once per payment, and only when the paid amount matches. SEPA top-ups are confirmed by staff in the console when the transfer arrives.
@@ -73,6 +85,7 @@ Copy `.env.example` to `.env` (loaded automatically by `npm start`) or set the v
 | `TRUST_PROXY` | `1` behind a reverse proxy. |
 | `WORKER_FEE_PCT` | Specialist fee at release, in percent. |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Real card and wallet top-ups (see above). |
+| `GOOGLE_*`, `FACEBOOK_*`, `APPLE_*`, `GITHUB_*` | Sign in with Google, Facebook, Apple and GitHub (see above). |
 
 ## Deploy
 

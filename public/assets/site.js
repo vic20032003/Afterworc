@@ -52,7 +52,7 @@ const DEPTS=[
  {k:'ops',n:'Business Support',ic:'brief',size:'4 people, one team lead',roles:['Project Manager','Operations Manager','Customer Support','Admin Assistant'],tasks:['Project management','Day-to-day operations','Customer support','Back office']}
 ];
 const AREAS={Development:['Backend Developer','Frontend Developer','Fullstack Developer','Mobile Developer','DevOps Engineer','QA Engineer','Team Lead'],Design:['UI/UX Designer','Product Designer','Graphic Designer','Brand Designer','Motion Designer'],Marketing:['Marketing Lead','SMM Manager','Content Writer','Performance Marketer','SEO Specialist'],'Business Support':['Project Manager','Product Manager','Business Analyst','Customer Support','Accountant'],Content:['Copywriter','Translator','Technical Writer','Video Editor'],'Data & Infrastructure':['Data Engineer','Data Analyst','Cloud Engineer','Database Administrator'],'Quality & Security':['QA Automation Engineer','Security Engineer','Penetration Tester']};
-const S={me:null,busy:false,forgot:{email:'',done:false},reset:{token:'',pw:''},lang:'en',page:'home',reg:{role:'hire',email:'',pw:'',show:false,terms:false,news:false,done:false,ctx:''},login:{email:'',pw:''},f:{area:'All',level:'any',now:false,max:80,sort:'match'},person:null,dept:'dev',ctab:'biz',tg:{online:true,contactless:true,atm:false,abroad:true},frozen:false,form:{hire:{step:0,type:'team',need:'',email:'',chan:'Email only',done:false},build:{step:0,prof:'',years:'3–5',link:'',email:'',chan:'Email only',done:false}},menu:false,q:'',htab:'hire'};
+const S={me:null,busy:false,forgot:{email:'',done:false},reset:{token:'',pw:''},lang:'en',page:'home',reg:{role:'hire',email:'',pw:'',show:false,terms:false,news:false,done:false,ctx:''},login:{email:'',pw:''},f:{area:'All',level:'any',now:false,max:80,sort:'match'},person:null,dept:'dev',ctab:'biz',tg:{online:true,contactless:true,atm:false,abroad:true},frozen:false,form:{hire:{step:0,type:'team',need:'',email:'',chan:'Email only',done:false},build:{step:0,prof:'',years:'3–5',link:'',email:'',chan:'Email only',done:false}},menu:false,q:'',htab:'hire',providers:[],oauth:{terms:false,news:false,role:'hire',code:''}};
 
 /* ================= shell ================= */
 const NAV=[['search','Find specialists'],['how','How it works'],['card','AfterWorc card',1],['about','About']];
@@ -484,8 +484,66 @@ function vAbout(){
     <div class="next" style="margin-top:40px"><div style="position:relative;z-index:1"><h3 style="font-size:22px">Two doors, both open.</h3><p style="margin-top:6px">Clients get a short list with the checks stated. Specialists are chosen on what was checked, not on how fast they replied.</p></div><div class="btns" style="position:relative;z-index:1"><a class="btn" href="#register">Sign up free</a><a class="btn ghost" href="#hiring">I’m hiring</a><a class="btn ghost" href="#building">I’m building</a></div></div>`)}`;
 }
 
+/* ---------- sign in with Google, Apple, Facebook, GitHub ---------- */
+const BRAND={
+ google:'<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>',
+ apple:'<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.37 1.43c0 1.14-.42 2.2-1.25 3.17-1 1.17-2.21 1.84-3.52 1.74a3.5 3.5 0 0 1-.03-.43c0-1.09.48-2.26 1.32-3.21.42-.48.96-.88 1.61-1.2.65-.31 1.26-.48 1.84-.51.02.15.03.3.03.44zm4.62 16.3c-.36.84-.79 1.6-1.29 2.31-.68.96-1.24 1.63-1.67 2-.67.62-1.39.93-2.16.95-.55 0-1.22-.16-2-.48-.78-.32-1.5-.48-2.15-.48-.69 0-1.42.16-2.21.48-.79.32-1.42.49-1.91.5-.74.03-1.48-.3-2.21-.98-.47-.41-1.06-1.11-1.76-2.1-.75-1.06-1.37-2.28-1.86-3.68C.86 13.74.6 12.28.6 10.86c0-1.62.35-3.02 1.05-4.19A6.2 6.2 0 0 1 3.85 4.4a5.9 5.9 0 0 1 2.97-.84c.58 0 1.35.18 2.3.54.95.36 1.56.54 1.83.54.2 0 .88-.21 2.04-.64 1.1-.4 2.02-.56 2.79-.5 2.06.17 3.6.98 4.63 2.44-1.84 1.12-2.75 2.68-2.73 4.68.02 1.56.58 2.86 1.69 3.89.5.48 1.06.85 1.69 1.11-.14.39-.28.77-.44 1.13z"/></svg>',
+ facebook:'<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877F2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.5c-1.5 0-1.96.93-1.96 1.89v2.26h3.32l-.53 3.5h-2.8V24C19.62 23.1 24 18.1 24 12.07"/></svg>',
+ github:'<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.07 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3"/></svg>'
+};
+const OAUTH_MSG={
+ off:'That sign-in option is not set up yet. Use your e-mail instead.',
+ cancel:'Sign-in was cancelled. Nothing was changed.',
+ fail:'We could not finish signing you in. Try again, or use your e-mail.',
+ expired:'That sign-in took too long or was opened in another browser. Try again.',
+ closed:'This account is closed. Contact info@afterworc.com if you want it back.',
+ noemail:'The provider did not share an e-mail address with us. Allow e-mail access, or sign up with your e-mail.',
+ exists:'An account with this e-mail already exists. Log in with your e-mail and password.'
+};
+function oauthStart(id,intent){
+  const q=new URLSearchParams({intent});
+  if(intent==='register'){const r=S.reg;q.set('role',r.role);if(r.terms)q.set('terms','1');if(r.news)q.set('news','1');if(r.ctx)q.set('ctx',r.ctx)}
+  if(S.loginFor==='staff')q.set('staff','1');
+  return '/api/auth/oauth/'+id+'/start?'+q;
+}
+function social(intent){
+  if(!S.providers.length)return '';
+  return `<div class="social" role="group" aria-label="Continue with">${S.providers.map(p=>p.enabled
+    ?`<a class="btn ghost sbtn" href="${esc(oauthStart(p.id,intent))}" data-oauth="${p.id}" data-intent="${intent}">${BRAND[p.id]||''}<span>Continue with</span><b data-notr>${esc(p.name)}</b></a>`
+    :`<button type="button" class="btn ghost sbtn off" data-act="oauthoff" data-arg="${esc(p.name)}" title="Not set up yet">${BRAND[p.id]||''}<span>Continue with</span><b data-notr>${esc(p.name)}</b></button>`).join('')}</div>
+    <div class="or"><span>or use your e-mail</span></div>`;
+}
+function oauthBanner(k){const m=OAUTH_MSG[k];return m?`<div class="banner am" style="margin-bottom:14px">${ic('clock',16)}<span>${m}</span></div>`:''}
+function vOauthFinish(){
+  const o=S.oauth,p=o.pending;
+  if(!p)return `<section class="sec"><div class="wrap" style="max-width:480px"><div class="card pad-l lift stack" style="text-align:center;justify-items:center"><h2>Loading…</h2></div></div></section>`;
+  if(p.kind!=='signup')return `<section class="sec"><div class="wrap" style="max-width:480px">${oauthBanner('expired')}<a class="btn g block" href="#register">Back to sign up</a></div></section>`;
+  return `<section class="sec"><div class="wrap" style="max-width:520px">
+    <form class="card pad-l lift" data-form="oauthfinish" novalidate>
+      <span class="mono">One more step</span><h2 style="margin:6px 0 4px">Finish creating your account</h2>
+      <p class="muted" style="margin-bottom:16px">You are signing up with <b data-notr>${esc(p.provider)}</b> as <b data-notr>${esc(p.email)}</b>.</p>
+      <div class="field"><span>I want to</span><div class="opts" style="grid-template-columns:1fr 1fr">${[['hire','team','Hire','Find people or a team'],['work','task','Work','Get matched to briefs']].map(([k,i,t,d])=>`<button type="button" class="opt ${o.role===k?'on':''}" data-act="oarole" data-arg="${k}" style="padding:12px"><span class="ic">${ic(i,15)}</span><b style="font-size:15px;margin:4px 0 0">${t}</b><span>${d}</span></button>`).join('')}</div></div>
+      <label class="row small" style="align-items:flex-start;margin-bottom:10px"><input type="checkbox" data-act="oaterms" ${o.terms?'checked':''} style="margin-top:3px"><span>I accept the Terms and Conditions and the Privacy and Confidentiality Policy. <a href="#terms">Read the Terms</a> · <a href="#privacy">Privacy Policy</a></span></label>
+      <label class="row small" style="align-items:flex-start;margin-bottom:16px"><input type="checkbox" data-act="oanews" ${o.news?'checked':''} style="margin-top:3px"><span class="muted">Send me product news. Optional, and you can withdraw it at any time.</span></label>
+      <button class="btn g block lg" type="submit" ${S.busy?'disabled':''}>Create account</button>
+      <p class="small muted" style="margin-top:14px;text-align:center"><a class="btn link" href="#register">Use another way to sign up</a></p>
+    </form></div></section>`;
+}
+function vOauth2fa(){
+  const o=S.oauth;
+  return `<section class="sec"><div class="wrap" style="max-width:480px">
+    <form class="card pad-l lift stack" data-form="oauth2fa" novalidate>
+      <span class="mono">Two-factor authentication</span><h2>Enter your code</h2>
+      <p class="muted">${o.pending&&o.pending.kind==='2fa'?`Signed in with <b data-notr>${esc(o.pending.provider)}</b>. `:''}Your account has two-factor authentication on. Enter the 6-digit code from your authenticator app.</p>
+      <label class="field" style="margin:0"><span>Code from your authenticator app</span><input id="o-code" class="inp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" data-bind="oauth.code" value="${esc(o.code)}" placeholder="6 digits"></label>
+      <button class="btn g block" type="submit" ${S.busy?'disabled':''}>Log in</button>
+      <a class="btn link small" href="#login" style="justify-self:center">Back to log in</a>
+    </form></div></section>`;
+}
+
 /* ================= SIGN UP / LOG IN (mirrors afterworc.com/register and /login) ================= */
 function vRegister(){
+  if(S.regOauth==='oauth')return vOauthFinish();
   const r=S.reg,hire=r.role==='hire';
   const ctx=r.ctx&&PEOPLE.find(p=>p.id===r.ctx);
   if(r.done)return `<section class="sec"><div class="wrap" style="max-width:520px"><div class="card pad-l lift stack" style="text-align:center;justify-items:center">
@@ -500,7 +558,9 @@ function vRegister(){
       ${checks(hire?[['Post a brief','A person reads it and sends up to 3 checked matches within 48 hours.'],['Money held until you accept','Pay by bank link, SEPA, card or phone wallet.'],['One agreement, one invoice','For a single task or a whole department.']]:[['Build your profile','Skills, rate, availability and work samples.'],['Get checked','ID, references and a live interview. Free.'],['Get matched','No bidding, no paid proposals.']])}
       ${note('Mirrors the live form at afterworc.com/register: e-mail, password with Show, required Terms and Privacy checkbox, optional product news, Create account. The role choice is new and only sets which mode opens first.')}</div>
     <form class="card pad-l lift" data-form="reg" novalidate>
+      ${S.regOauth?oauthBanner(S.regOauth.slice(5)):''}
       <div class="field"><span>I want to</span><div class="opts" style="grid-template-columns:1fr 1fr">${[['hire','team','Hire','Find people or a team'],['work','task','Work','Get matched to briefs']].map(([k,i,t,d])=>`<button type="button" class="opt ${r.role===k?'on':''}" data-act="regrole" data-arg="${k}" style="padding:12px"><span class="ic">${ic(i,15)}</span><b style="font-size:15px;margin:4px 0 0">${t}</b><span>${d}</span></button>`).join('')}</div></div>
+      ${social('register')}
       <label class="field"><span>E-mail</span><input id="r-email" class="inp" type="email" data-bind="reg.email" value="${esc(r.email)}" placeholder="you@company.com" autocomplete="email"></label>
       <label class="field"><span>Password</span><div style="position:relative"><input id="r-pw" class="inp" type="${r.show?'text':'password'}" data-bind="reg.pw" value="${esc(r.pw)}" autocomplete="new-password" style="padding-right:72px"><button type="button" class="btn link" data-act="regshow" style="position:absolute;right:12px;top:50%;transform:translateY(-50%)">${r.show?'Hide':'Show'}</button></div><small>At least 10 characters.</small></label>
       <label class="row small" style="align-items:flex-start;margin-bottom:10px"><input type="checkbox" data-act="regterms" ${r.terms?'checked':''} style="margin-top:3px"><span>I accept the Terms and Conditions and the Privacy and Confidentiality Policy. <a href="#terms">Read the Terms</a> · <a href="#privacy">Privacy Policy</a></span></label>
@@ -511,15 +571,18 @@ function vRegister(){
   </div></section>`;
 }
 function vLogin(){
+  if(S.loginFor==='oauth2fa')return vOauth2fa();
   const card=S.loginFor==='card',staff=S.loginFor==='staff',L=S.login;
   const head=card?'Log in to get your card':staff?'Staff log in':'Log in';
   return `<section class="sec"><div class="wrap" style="max-width:480px">
     ${S.loginFor==='expired'?`<div class="banner am" style="margin-bottom:14px">${ic('clock',16)}<span>This link has expired or was already used. Log in, or ask for a new link.</span></div>`:''}
     ${S.loginFor==='invite'?`<div class="banner" style="margin-bottom:14px">${ic('team',16)}<span>Log in with the invited e-mail, then open the invitation link again.</span></div>`:''}
     ${S.loginFor==='reset'?`<div class="banner" style="margin-bottom:14px">${ic('check',16)}<span>Password changed. Log in with your new password.</span></div>`:''}
+    ${S.loginFor&&S.loginFor.startsWith('oauth')?oauthBanner(S.loginFor.slice(5)):''}
     <form class="card pad-l lift stack" data-form="login" novalidate>
       <span class="mono">${card?'AfterWorc card':staff?'AfterWorc staff':'Account'}</span>
       <h2>${head}</h2>
+      ${social('login')}
       <label class="field" style="margin:0"><span>E-mail</span><input id="l-email" class="inp" type="email" data-bind="login.email" value="${esc(L.email)}" placeholder="you@company.com" autocomplete="email"></label>
       <label class="field" style="margin:0"><span>Password</span><input id="l-pw" class="inp" type="password" data-bind="login.pw" value="${esc(L.pw)}" autocomplete="current-password"></label>
       ${L.need2fa?`<label class="field" style="margin:0"><span>Code from your authenticator app</span><input id="l-code" class="inp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" data-bind="login.code" value="${esc(L.code||'')}" placeholder="6 digits"></label>`:''}
@@ -625,14 +688,16 @@ function route(){
   if(pg==='signin')pg='login';
   if(pg==='map')pg='home';
   if(pg==='register')S.reg.done=false;
-  if(pg==='register'&&anchor){if(anchor==='hire'||anchor==='work'){S.reg.role=anchor;S.reg.ctx=''}else{S.reg.role='hire';S.reg.ctx=anchor}anchor=null}
+  S.regOauth=null;
+  if(pg==='register'&&anchor&&anchor.startsWith('oauth')){S.regOauth=anchor;anchor=null;if(S.regOauth==='oauth')loadPending()}
+  else if(pg==='register'&&anchor){if(anchor==='hire'||anchor==='work'){S.reg.role=anchor;S.reg.ctx=''}else{S.reg.role='hire';S.reg.ctx=anchor}anchor=null}
   else if(pg==='register'){S.reg.ctx=''}
-  if(pg==='login'){S.loginFor=anchor||null;anchor=null}
+  if(pg==='login'){S.loginFor=anchor||null;anchor=null;if(S.loginFor==='oauth2fa')loadPending()}
   if(pg==='forgot'){S.forgot.done=false}
   if(pg==='reset'){S.reset={token:anchor||'',pw:''};anchor=null;history.replaceState(null,'','#reset')}
   if(pg==='specialist'){S.person=anchor;anchor=null}
   if(!PAGES[pg])pg='home';
-  if((pg==='register'||pg==='login')&&S.me&&!S.loginFor){location.href='/app';return}
+  if((pg==='register'||pg==='login')&&S.me&&!S.loginFor&&!S.regOauth){location.href='/app';return}
   const changed=S.page!==pg||pg==='specialist'||pg==='register';S.page=pg;S.menu=false;
   document.title=({home:'AfterWorc · Checked specialists and departments on demand',hiring:'Hire checked specialists · AfterWorc',building:'For specialists · AfterWorc',how:'How it works · AfterWorc',card:'AfterWorc card',categories:'Categories · AfterWorc',about:'About us · AfterWorc',register:'Sign up · AfterWorc',login:'Log in · AfterWorc',search:'Find specialists · AfterWorc',terms:'Terms and Conditions · AfterWorc',privacy:'Privacy Policy · AfterWorc',cookies:'Cookie Notice · AfterWorc'})[pg]||'AfterWorc';
   render(anchor);
@@ -659,6 +724,8 @@ const A={
   hcodeback:()=>{S.form.hire.leadId=null;S.form.hire.code='';keep()},
   theme:()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark';try{localStorage.setItem('aw-theme',r.dataset.theme)}catch(e){}S.menu=false;keep()},
   regrole:k=>{S.reg.role=k;keep()},regshow:()=>{S.reg.show=!S.reg.show;keep()},regterms:()=>{S.reg.terms=!S.reg.terms;keep()},regnews:()=>{S.reg.news=!S.reg.news;keep()},
+  oauthoff:n=>toast(n+' sign-in is not set up yet. Add its keys on the server (see .env.example).',true),
+  oarole:k=>{S.oauth.role=k;keep()},oaterms:()=>{S.oauth.terms=!S.oauth.terms;keep()},oanews:()=>{S.oauth.news=!S.oauth.news;keep()},
   regreset:()=>{S.reg={role:S.reg.role,email:'',pw:'',show:false,terms:false,news:false,done:false,ctx:''};keep()},
   farea:a=>{S.f.area=a;keep()},flevel:k=>{S.f.level=k;keep()},fnow:()=>{S.f.now=!S.f.now;keep()},freset:()=>{S.f={area:'All',level:'any',now:false,max:80,sort:'match'};S.q='';keep()},
   htab:k=>{S.htab=k;keep();setTimeout(()=>document.querySelector('.hsearch input')?.focus({preventScroll:true}),0)},
@@ -690,7 +757,7 @@ document.addEventListener('input',e=>{
   const b=e.target.dataset.bind;if(!b)return;
   if(b==='q'){S.q=e.target.value;const el=document.getElementById('catlist');el.innerHTML=catGrid();if(S.lang!=='en')translateDOM(el);return}
   if(b==='q2'||b.startsWith('f.')){if(b==='q2')S.q=e.target.value;else{const k=b.slice(2);S.f[k]=k==='max'?Number(e.target.value):e.target.value;if(k==='max'){const lab=e.target.closest('label').querySelector('[data-notr]');if(lab)lab.textContent='€'+S.f.max}}const el=document.getElementById('results');el.innerHTML=results();if(S.lang!=='en')translateDOM(el);return}
-  const [f,k]=b.split('.');if(['reg','login','forgot','reset'].includes(f)){S[f][k]=e.target.value;return}S.form[f][k]=e.target.value;
+  const [f,k]=b.split('.');if(['reg','login','forgot','reset','oauth'].includes(f)){S[f][k]=e.target.value;return}S.form[f][k]=e.target.value;
 });
 document.addEventListener('submit',e=>{
   e.preventDefault();const which=e.target.dataset.form;
@@ -701,6 +768,10 @@ document.addEventListener('submit',e=>{
   if(which==='login'){const L=S.login;if(!/.+@.+\..+/.test(L.email)){toast('Enter your e-mail address');return}if(!L.pw){toast('Enter your password');return}
     busy(async()=>{L.unverified=false;const d=await api('/auth/login',{email:L.email,password:L.pw,code:L.code||undefined,admin:S.loginFor==='staff'});if(d.need2fa){L.need2fa=true;setTimeout(()=>document.getElementById('l-code')?.focus(),0);return}
       location.href=S.loginFor==='card'?d.redirect.replace(/\/home$/,'/card'):d.redirect});return}
+  if(which==='oauthfinish'){const o=S.oauth;if(!o.terms){toast('Accept the Terms and Conditions and the Privacy Policy to continue');return}
+    busy(async()=>{try{const d=await api('/auth/oauth/complete',{terms:true,news:o.news,role:o.role});location.href=d.redirect}catch(e){if(e.data&&e.data.expired)o.pending={kind:null};throw e}});return}
+  if(which==='oauth2fa'){const o=S.oauth;if(!/^\d{6}$/.test((o.code||'').trim())){toast('Enter the 6-digit code');return}
+    busy(async()=>{const d=await api('/auth/oauth/2fa',{code:o.code.trim()});location.href=d.redirect});return}
   if(which==='forgot'){const f=S.forgot;if(!/.+@.+\..+/.test(f.email)){toast('Enter your e-mail address');return}busy(async()=>{const d=await api('/auth/forgot',{email:f.email});f.devLink=d.devLink||'';f.done=true});return}
   if(which==='reset'){const r=S.reset;if((r.pw||'').length<10){toast('Use at least 10 characters for the password');return}busy(async()=>{await api('/auth/reset',{token:r.token,password:r.pw});S.reset={token:'',pw:''};location.hash='login-reset'});return}
   if(which==='hirecode'){const f=S.form.hire;busy(async()=>{await api('/leads/'+f.leadId+'/confirm',{code:f.code});f.done=true});return}
@@ -718,4 +789,5 @@ document.addEventListener('submit',e=>{
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.menu){S.menu=false;keep()}});
 try{const t=localStorage.getItem('aw-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
 try{const l=localStorage.getItem('aw-lang');if(l&&I18N[l])S.lang=l}catch(e){}
-Promise.all([api('/auth/me').then(d=>{S.me=d.user}).catch(()=>{}),api('/specialists').then(d=>{PEOPLE=d.map(cleanPerson)}).catch(()=>{})]).then(route);
+function loadPending(){S.oauth.pending=null;api('/auth/oauth/pending').then(d=>{S.oauth.pending=d;if(d.role)S.oauth.role=d.role;if(S.page==='register'||S.page==='login')keep()}).catch(()=>{S.oauth.pending={kind:null};keep()})}
+Promise.all([api('/auth/oauth/providers').then(d=>{S.providers=d.providers||[]}).catch(()=>{}),api('/auth/me').then(d=>{S.me=d.user}).catch(()=>{}),api('/specialists').then(d=>{PEOPLE=d.map(cleanPerson)}).catch(()=>{})]).then(route);

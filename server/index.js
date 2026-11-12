@@ -30,6 +30,7 @@ function createApp() {
   app.use('/api/stripe/webhook', require('./payments').webhook); // raw body, signature-verified; before JSON + CSRF
   app.use(express.json({ limit: '200kb' }));
   app.use(sessionMiddleware);
+  app.use('/api/auth/oauth', require('./routes/oauth')); // Apple answers with a cross-site POST; the router guards its own JSON endpoints
   app.use('/api', csrfGuard);
   app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   app.use('/api/auth', require('./routes/auth'));

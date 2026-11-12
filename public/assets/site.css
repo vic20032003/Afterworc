@@ -282,3 +282,13 @@ body.notes .notesbtn .sw{background:#5fcf7d}body.notes .notesbtn .sw::after{left
 @media (max-width:640px){.btn{white-space:normal;text-align:center}}
 .cardnext{display:grid!important;grid-template-columns:1.05fr .95fr;gap:32px}
 @media (max-width:900px){.cardnext{grid-template-columns:1fr}.next.cardnext{padding:26px 22px!important}}
+/* sign in with Google, Apple, Facebook, GitHub */
+.social{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px}
+.sbtn{justify-content:flex-start;gap:10px;padding:11px 14px;font-weight:500;border-radius:12px;min-width:0}
+.sbtn span{display:none}.sbtn b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.sbtn svg{flex:none}
+.sbtn.off{opacity:.55;cursor:not-allowed}
+.sbtn.off:hover{border-color:var(--line)}
+.or{display:flex;align-items:center;gap:12px;margin:12px 0 14px;color:var(--muted);font-size:13px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+@media (max-width:380px){.social{grid-template-columns:1fr}.sbtn span{display:inline}}

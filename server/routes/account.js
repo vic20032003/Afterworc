@@ -661,6 +661,7 @@ ACT.account_close = (u, b, req, res) => {
       run('DELETE FROM briefs WHERE user_id=? AND id NOT IN (SELECT brief_id FROM deals WHERE brief_id IS NOT NULL)', u.id);
     })();
   }
+  run('DELETE FROM user_identities WHERE user_id=?', u.id);
   run('DELETE FROM sessions WHERE user_id=?', u.id);
   mail.toStaff(`Account ${how}d`, `User #${u.id} ${how}d their account.`);
   return { toast: how === 'close' ? 'Account closed' : 'Account deleted', logout: true };

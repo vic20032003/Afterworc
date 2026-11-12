@@ -92,9 +92,17 @@ function consumeToken(kind, token) {
   return { userId: row.user_id, data: j(row.data, null) };
 }
 
+/** Reads a one-time token without using it up. */
+function peekToken(kind, token) {
+  if (!token || typeof token !== 'string' || token.length > 100) return null;
+  const row = tq.get.get(sha256(token), kind);
+  if (!row || row.used_at || row.expires_at < now()) return null;
+  return { userId: row.user_id, data: j(row.data, null) };
+}
+
 function audit(req, action, detail) {
   db.prepare('INSERT INTO audit (user_id, action, detail, ip, created_at) VALUES (?,?,?,?,?)')
     .run(req.user ? req.user.id : null, action, detail ? String(detail).slice(0, 500) : null, req.ip, now());
 }
 
-module.exports = { sessionMiddleware, csrfGuard, requireUser, requireAdmin, createSession, destroySession, issueToken, consumeToken, audit };
+module.exports = { sessionMiddleware, csrfGuard, requireUser, requireAdmin, createSession, destroySession, issueToken, consumeToken, peekToken, audit, parseCookies, SECURE };
