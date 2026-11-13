@@ -10,12 +10,13 @@ const path = require('path');
 process.env.NODE_ENV = 'test';
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-oauth-'));
 process.env.SEED_DEMO = '1';
+const APPLE_KEY = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
 Object.assign(process.env, {
   GOOGLE_CLIENT_ID: 'g-client', GOOGLE_CLIENT_SECRET: 'g-secret',
   FACEBOOK_APP_ID: 'fb-app', FACEBOOK_APP_SECRET: 'fb-secret',
   GITHUB_CLIENT_ID: 'gh-client', GITHUB_CLIENT_SECRET: 'gh-secret',
   APPLE_CLIENT_ID: 'com.afterworc.web', APPLE_TEAM_ID: 'TEAM123', APPLE_KEY_ID: 'KEY123',
-  APPLE_PRIVATE_KEY: crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ type: 'pkcs8', format: 'pem' }).replace(/\n/g, '\\n')
+  APPLE_PRIVATE_KEY: APPLE_KEY.privateKey.export({ type: 'pkcs8', format: 'pem' }).replace(/\n/g, '\\n')
 });
 const { createApp } = require('../server/index');
 const { db } = require('../server/db');
@@ -173,6 +174,7 @@ test('Apple: form_post callback, signed client secret, name sent once', async ()
   assert.equal(JSON.parse(Buffer.from(h, 'base64url')).alg, 'ES256');
   assert.equal(JSON.parse(Buffer.from(p, 'base64url')).iss, 'TEAM123');
   assert.equal(Buffer.from(sig, 'base64url').length, 64);
+  assert.ok(crypto.verify('sha256', Buffer.from(`${h}.${p}`), { key: APPLE_KEY.publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(sig, 'base64url')), 'Apple client secret signature verifies');
 });
 
 test('two-factor authentication still applies', async () => {
@@ -198,4 +200,36 @@ test('a provider without keys is refused', async () => {
     assert.equal((await browser().get('/api/auth/oauth/github/start?intent=login')).location, '/#login-oauthoff');
     assert.equal((await browser().get('/api/auth/oauth/nope/start')).location, '/#login-oauthfail');
   } finally { process.env.GITHUB_CLIENT_SECRET = 'gh-secret'; }
+});
+
+test('an unconfirmed sign-up cannot hijack the address once Google confirms it', async () => {
+  // Someone signs up with another person's address and a password they know, but never confirms it.
+  const attacker = browser();
+  assert.equal((await attacker.post('/api/auth/register', { email: 'victim@example.com', password: 'attacker-knows-this', terms: true })).status, 200);
+  // The real owner arrives with Google.
+  fake.google = { sub: 'g-victim', email: 'victim@example.com', verified: true, name: 'Vic' };
+  const owner = browser();
+  const { back } = await signIn(owner, 'google', 'intent=login');
+  assert.match(back.location, /^\/app#\//);
+  // The attacker's password no longer works.
+  const r = await browser().post('/api/auth/login', { email: 'victim@example.com', password: 'attacker-knows-this' });
+  assert.equal(r.status, 400);
+});
+
+test('an account made with a provider can set its first password', async () => {
+  fake.github = { sub: '777', email: 'nopw@example.com', name: 'No Pw' };
+  const b = browser();
+  await signIn(b, 'github', 'intent=register&terms=1');
+  const st = (await b.get('/api/account/state')).data;
+  assert.equal(st.me.hasPassword, false);
+  assert.deepEqual(st.me.signInWith, ['GitHub']);
+  // Changing e-mail or closing the account asks for a password first.
+  const em = await b.post('/api/account/action', { type: 'email_change', email: 'other@example.com', password: '' });
+  assert.equal(em.status, 400); assert.match(em.data.error, /Set a password first/);
+  const set = await b.post('/api/account/action', { type: 'password_change', next: 'a-brand-new-password' });
+  assert.equal(set.status, 200);
+  assert.equal((await b.get('/api/account/state')).data.me.hasPassword, true);
+  assert.equal((await browser().post('/api/auth/login', { email: 'nopw@example.com', password: 'a-brand-new-password' })).status, 200);
+  // Now the current password is required again.
+  assert.equal((await b.post('/api/account/action', { type: 'password_change', next: 'another-password-123' })).status, 400);
 });

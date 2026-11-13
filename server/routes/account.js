@@ -96,7 +96,8 @@ router.get('/export', (req, res) => {
   const { pass_hash, totp_secret, totp_pending, ...user } = one('SELECT * FROM users WHERE id=?', uid);
   const data = { exportedAt: new Date().toISOString(), user, state: D.buildState(uid, req.sid),
     messages: all('SELECT m.* FROM messages m JOIN threads t ON t.id=m.thread_id WHERE t.user_id=? OR t.peer_user_id=?', uid, uid),
-    transactions: all('SELECT * FROM transactions WHERE user_id=?', uid), audit: all('SELECT action, detail, ip, created_at FROM audit WHERE user_id=?', uid) };
+    transactions: all('SELECT * FROM transactions WHERE user_id=?', uid),
+    signInWith: all('SELECT provider, email, created_at, last_used_at FROM user_identities WHERE user_id=?', uid), audit: all('SELECT action, detail, ip, created_at FROM audit WHERE user_id=?', uid) };
   audit(req, 'data_export');
   res.setHeader('Content-Disposition', 'attachment; filename="afterworc-data.json"');
   res.json(data);
@@ -571,8 +572,11 @@ ACT.twofa_disable = (u, b) => {
   mail.send(u.email, 'Two-factor authentication is off', 'Two-factor authentication was turned off for your AfterWorc account. If this wasn\'t you, contact info@afterworc.com right away.');
   return { toast: 'Two-factor authentication off' };
 };
+const hasPassword = uid => String(D.userById(uid).pass_hash || '').startsWith('scrypt$');
+const needPassword = u => { if (!hasPassword(u.id)) throw bad('Set a password first (Settings › Sign-in), then try again'); };
 ACT.password_change = (u, b, req) => {
-  if (!U.verifyPassword(String(b.current || ''), D.userById(u.id).pass_hash)) throw bad('Your current password is not right');
+  // Accounts made with Google, Apple, Facebook or GitHub have no password yet: the first one needs no "current".
+  if (hasPassword(u.id) && !U.verifyPassword(String(b.current || ''), D.userById(u.id).pass_hash)) throw bad('Your current password is not right');
   const pw = str(b.next, { min: 10, max: 200, name: 'the new password', trim: false });
   run('UPDATE users SET pass_hash=?, password_changed_at=? WHERE id=?', U.hashPassword(pw), now(), u.id);
   run('DELETE FROM sessions WHERE user_id=? AND id!=?', u.id, req.sid);
@@ -580,6 +584,7 @@ ACT.password_change = (u, b, req) => {
   return { toast: 'Password changed. Other sessions signed out' };
 };
 ACT.email_change = (u, b) => {
+  needPassword(u);
   if (!U.verifyPassword(String(b.password || ''), D.userById(u.id).pass_hash)) throw bad('Your password is not right');
   const e = U.email(b.email);
   if (one('SELECT 1 FROM users WHERE email=?', e)) throw bad('That e-mail is already used by another account');
@@ -639,6 +644,7 @@ ACT.org_invite = (u, b) => {
   return { toast: 'Invitation sent' };
 };
 ACT.account_close = (u, b, req, res) => {
+  needPassword(u);
   if (!U.verifyPassword(String(b.password || ''), D.userById(u.id).pass_hash)) throw bad('Your password is not right');
   const how = oneOf(b.how, ['close', 'delete'], 'option');
   if (String(b.confirm || '').trim().toUpperCase() !== how.toUpperCase()) throw bad(`Type ${how.toUpperCase()} to confirm`);

@@ -78,6 +78,7 @@ const tq = {
   use: db.prepare('UPDATE tokens SET used_at=? WHERE hash=?'),
   clear: db.prepare('DELETE FROM tokens WHERE user_id=? AND kind=? AND used_at IS NULL')
 };
+setInterval(() => db.prepare('DELETE FROM tokens WHERE expires_at<?').run(now() - DAY), 3600000).unref();
 function issueToken(kind, userId, ttl, data) {
   const t = randToken(24);
   tq.clear.run(userId, kind);

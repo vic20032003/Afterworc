@@ -126,7 +126,12 @@ async function callback(req, res) {
     if (existing.closed_at) return fail(res, 'closed', s.intent);
     if (!p.emailVerified) return fail(res, 'exists', s.intent);
     linkIdentity(existing.id, id, p);
-    if (!existing.email_verified) run('UPDATE users SET email_verified=1 WHERE id=?', existing.id);
+    // An unconfirmed sign-up with this address was never proven to be this person's: drop its password, 2FA and sessions,
+    // so whoever typed it can't get in now that the address is confirmed.
+    if (!existing.email_verified) {
+      run("UPDATE users SET email_verified=1, pass_hash='', totp_secret=NULL, totp_pending=NULL WHERE id=?", existing.id);
+      run('DELETE FROM sessions WHERE user_id=?', existing.id);
+    }
     mail.send(existing.email, `${P.name} sign-in added to your AfterWorc account`, `You can now log in to AfterWorc with ${P.name}.\n\nIf this wasn't you, change your password and contact info@afterworc.com right away.`);
     return res.redirect(finishLogin(req, res, D.userById(existing.id), id, s.staff));
   }

@@ -61,7 +61,8 @@ How accounts are matched:
 - A provider account used before logs straight in. Two-factor authentication still applies: the person is asked for their code.
 - A new address creates an account with the e-mail already confirmed. If the Terms box wasn't ticked on the sign-up page (or the person came from the log-in page), they are asked to accept the Terms and pick Hire or Work first.
 - If an AfterWorc account already uses the same e-mail, Google, Apple and GitHub join it, because they confirm the address; the owner gets an e-mail about it. Facebook doesn't say whether an address is confirmed, so it never joins an existing account: the person logs in with their password instead.
-- Accounts created this way have no password. "Forgot your password?" sets one, which settings that ask for the password (change e-mail, delete account) need.
+- Accounts created this way have no password. Settings › Sign-in shows "Set a password" (no current password asked), and "Forgot your password?" works too. Changing the e-mail or closing the account asks for a password first.
+- If someone had signed up with the same address but never confirmed it, that unconfirmed sign-up's password, 2FA and sessions are removed when a provider confirms the address, so it can't be used to get into the real owner's account.
 
 ## Money: what is live and what is test mode
 
